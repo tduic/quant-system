@@ -1,0 +1,21 @@
+# Mean Reversion Strategy Configuration
+strategy_id: mean_reversion_v1
+
+# VWAP lookback window in seconds
+vwap_window_s: 60
+
+# Standard deviation threshold for entry signal
+entry_threshold_std: 2.0
+
+# Standard deviation threshold for exit signal
+exit_threshold_std: 0.5
+
+# Base quantity per trade (in base asset, e.g. BTC)
+base_quantity: 0.001
+
+# Maximum position size (in base asset)
+max_position: 0.01
+
+# Signal strength scaling
+# strength = (deviation_from_vwap / std) / entry_threshold
+# capped at [-1.0, 1.0]

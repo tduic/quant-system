@@ -1,0 +1,28 @@
+[project]
+name = "quant-system"
+version = "0.1.0"
+requires-python = ">=3.14"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "lib/quant_core/tests",
+    "services/market-data/tests",
+    "services/storage/tests",
+]
+asyncio_mode = "auto"
+addopts = "-v --tb=short -q"
+markers = [
+    "integration: marks tests requiring live infrastructure (Kafka, DB, Redis)",
+]
+
+[tool.coverage.run]
+source = [
+    "lib/quant_core",
+    "services/market-data/market_data_svc",
+    "services/storage/storage_svc",
+]
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80

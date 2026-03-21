@@ -1,0 +1,46 @@
+# ==========================================================================
+# Quant Trading System — Default Configuration
+# ==========================================================================
+
+# Symbols to trade (comma-separated in env, list in yaml)
+symbols:
+  - btcusdt
+
+# Market Data Service
+market_data:
+  exchange: binance
+  reconnect_max_backoff_s: 60
+  stale_timeout_s: 30
+
+# Storage Service
+storage:
+  batch_size: 1000
+  batch_timeout_ms: 1000
+  book_snapshot_interval: 10
+  book_snapshot_depth: 20
+
+# Alpha Engine
+alpha:
+  strategies:
+    - mean_reversion
+  feature_windows_s: [10, 30, 60, 300]
+
+# Risk Gateway
+risk:
+  max_position_btc: 0.1
+  max_notional_usd: 10000
+  max_drawdown_pct: 5.0
+  max_daily_loss_usd: 500
+  max_open_orders: 5
+  min_order_interval_s: 5
+
+# Execution
+execution:
+  fee_rate: 0.001      # 0.1% Binance default
+  slippage_jitter_bps: 0.5
+
+# Database
+database:
+  trades_retention_days: 90
+  fills_retention_days: 365
+  compression_after_days: 7

@@ -1,0 +1,310 @@
+"""Tests for quant_core.models — shared event dataclasses."""
+
+from __future__ import annotations
+
+import json
+import uuid
+from datetime import datetime, timezone
+
+import pytest
+
+from quant_core.models import (
+    Trade,
+    DepthUpdate,
+    Signal,
+    Order,
+    Fill,
+    RiskDecision,
+    Side,
+    OrderType,
+    OrderStatus,
+    now_ms,
+)
+
+
+# -----------------------------------------------------------------------
+# Fixtures: raw Binance messages
+# -----------------------------------------------------------------------
+
+@pytest.fixture
+def binance_trade_msg() -> dict:
+    """Realistic Binance WebSocket trade message."""
+    return {
+        "e": "trade",
+        "E": 1672515782136,
+        "s": "BTCUSDT",
+        "t": 12345,
+        "p": "42150.50",
+        "q": "0.001",
+        "b": 88,
+        "a": 50,
+        "T": 1672515782136,
+        "m": True,
+        "M": True,
+    }
+
+
+@pytest.fixture
+def binance_depth_msg() -> dict:
+    """Realistic Binance WebSocket depth update message."""
+    return {
+        "e": "depthUpdate",
+        "E": 1672515782136,
+        "s": "BTCUSDT",
+        "U": 157,
+        "u": 160,
+        "b": [["42150.00", "1.5"], ["42149.50", "2.3"]],
+        "a": [["42151.00", "0.8"], ["42151.50", "1.1"]],
+    }
+
+
+# -----------------------------------------------------------------------
+# Trade
+# -----------------------------------------------------------------------
+
+class TestTrade:
+    def test_from_binance_parses_all_fields(self, binance_trade_msg: dict):
+        ingested_at = 1672515782140
+        trade = Trade.from_binance(binance_trade_msg, ingested_at)
+
+        assert trade.type == "trade"
+        assert trade.exchange == "binance"
+        assert trade.symbol == "BTCUSDT"
+        assert trade.trade_id == 12345
+        assert trade.price == pytest.approx(42150.50)
+        assert trade.quantity == pytest.approx(0.001)
+        assert trade.timestamp_exchange == 1672515782136
+        assert trade.timestamp_ingested == 1672515782140
+        assert trade.is_buyer_maker is True
+
+    def test_from_binance_price_is_float_not_string(self, binance_trade_msg: dict):
+        trade = Trade.from_binance(binance_trade_msg, 0)
+        assert isinstance(trade.price, float)
+        assert isinstance(trade.quantity, float)
+
+    def test_to_json_roundtrip(self, binance_trade_msg: dict):
+        original = Trade.from_binance(binance_trade_msg, 1672515782140)
+        json_str = original.to_json()
+        restored = Trade.from_json(json_str)
+
+        assert restored.symbol == original.symbol
+        assert restored.trade_id == original.trade_id
+        assert restored.price == pytest.approx(original.price)
+        assert restored.quantity == pytest.approx(original.quantity)
+        assert restored.timestamp_exchange == original.timestamp_exchange
+        assert restored.timestamp_ingested == original.timestamp_ingested
+        assert restored.is_buyer_maker == original.is_buyer_maker
+
+    def test_to_json_produces_valid_json(self, binance_trade_msg: dict):
+        trade = Trade.from_binance(binance_trade_msg, 0)
+        parsed = json.loads(trade.to_json())
+        assert parsed["symbol"] == "BTCUSDT"
+        assert parsed["type"] == "trade"
+
+    def test_from_json_with_bytes(self, binance_trade_msg: dict):
+        trade = Trade.from_binance(binance_trade_msg, 0)
+        json_bytes = trade.to_json().encode()
+        restored = Trade.from_json(json_bytes)
+        assert restored.symbol == "BTCUSDT"
+
+    def test_default_trade_has_sensible_defaults(self):
+        trade = Trade()
+        assert trade.type == "trade"
+        assert trade.exchange == "binance"
+        assert trade.price == 0.0
+        assert trade.is_buyer_maker is False
+
+
+# -----------------------------------------------------------------------
+# DepthUpdate
+# -----------------------------------------------------------------------
+
+class TestDepthUpdate:
+    def test_from_binance_parses_all_fields(self, binance_depth_msg: dict):
+        ingested_at = 1672515782140
+        depth = DepthUpdate.from_binance(binance_depth_msg, ingested_at)
+
+        assert depth.type == "depth_update"
+        assert depth.exchange == "binance"
+        assert depth.symbol == "BTCUSDT"
+        assert depth.first_update_id == 157
+        assert depth.final_update_id == 160
+        assert depth.timestamp_exchange == 1672515782136
+        assert depth.timestamp_ingested == 1672515782140
+
+    def test_bids_asks_are_float_lists(self, binance_depth_msg: dict):
+        depth = DepthUpdate.from_binance(binance_depth_msg, 0)
+
+        assert len(depth.bids) == 2
+        assert len(depth.asks) == 2
+        assert depth.bids[0] == [pytest.approx(42150.00), pytest.approx(1.5)]
+        assert depth.asks[0] == [pytest.approx(42151.00), pytest.approx(0.8)]
+
+    def test_to_json_roundtrip(self, binance_depth_msg: dict):
+        original = DepthUpdate.from_binance(binance_depth_msg, 1672515782140)
+        json_str = original.to_json()
+        restored = DepthUpdate.from_json(json_str)
+
+        assert restored.symbol == original.symbol
+        assert restored.first_update_id == original.first_update_id
+        assert restored.final_update_id == original.final_update_id
+        assert len(restored.bids) == len(original.bids)
+        assert len(restored.asks) == len(original.asks)
+
+    def test_empty_bids_asks(self):
+        msg = {
+            "e": "depthUpdate",
+            "E": 1672515782136,
+            "s": "BTCUSDT",
+            "U": 1,
+            "u": 2,
+            "b": [],
+            "a": [],
+        }
+        depth = DepthUpdate.from_binance(msg, 0)
+        assert depth.bids == []
+        assert depth.asks == []
+
+
+# -----------------------------------------------------------------------
+# Signal
+# -----------------------------------------------------------------------
+
+class TestSignal:
+    def test_signal_generates_uuid(self):
+        s1 = Signal()
+        s2 = Signal()
+        assert s1.signal_id != s2.signal_id
+        # Should be valid UUID
+        uuid.UUID(s1.signal_id)
+
+    def test_signal_roundtrip(self):
+        signal = Signal(
+            strategy_id="mean_reversion_v1",
+            symbol="BTCUSDT",
+            side=Side.BUY.value,
+            strength=0.75,
+            target_quantity=0.001,
+            urgency=0.8,
+            mid_price_at_signal=42150.0,
+            spread_at_signal=1.0,
+        )
+        restored = Signal.from_json(signal.to_json())
+        assert restored.strategy_id == "mean_reversion_v1"
+        assert restored.side == "BUY"
+        assert restored.strength == pytest.approx(0.75)
+
+    def test_signal_metadata_survives_roundtrip(self):
+        signal = Signal(metadata={"reason": "vwap_deviation", "std_dev": 2.5})
+        restored = Signal.from_json(signal.to_json())
+        assert restored.metadata["reason"] == "vwap_deviation"
+        assert restored.metadata["std_dev"] == pytest.approx(2.5)
+
+
+# -----------------------------------------------------------------------
+# Order
+# -----------------------------------------------------------------------
+
+class TestOrder:
+    def test_order_defaults(self):
+        order = Order()
+        assert order.order_type == "MARKET"
+        assert order.status == "SUBMITTED"
+        uuid.UUID(order.order_id)  # valid UUID
+
+    def test_order_roundtrip(self):
+        order = Order(
+            symbol="BTCUSDT",
+            side=Side.BUY.value,
+            order_type=OrderType.LIMIT.value,
+            quantity=0.001,
+            limit_price=42000.0,
+            strategy_id="test",
+        )
+        restored = Order.from_json(order.to_json())
+        assert restored.symbol == "BTCUSDT"
+        assert restored.limit_price == pytest.approx(42000.0)
+        assert restored.order_type == "LIMIT"
+
+
+# -----------------------------------------------------------------------
+# Fill
+# -----------------------------------------------------------------------
+
+class TestFill:
+    def test_fill_roundtrip(self):
+        fill = Fill(
+            order_id="abc-123",
+            symbol="BTCUSDT",
+            side=Side.BUY.value,
+            quantity=0.001,
+            fill_price=42150.50,
+            fee=0.04215,
+            slippage_bps=0.5,
+        )
+        restored = Fill.from_json(fill.to_json())
+        assert restored.order_id == "abc-123"
+        assert restored.fill_price == pytest.approx(42150.50)
+        assert restored.fee == pytest.approx(0.04215)
+        assert restored.slippage_bps == pytest.approx(0.5)
+
+
+# -----------------------------------------------------------------------
+# RiskDecision
+# -----------------------------------------------------------------------
+
+class TestRiskDecision:
+    def test_risk_decision_roundtrip(self):
+        decision = RiskDecision(
+            signal_id="sig-123",
+            decision="APPROVED",
+            reason="within_limits",
+            adjusted_quantity=0.001,
+            checks_passed=["position_size", "drawdown"],
+            checks_failed=[],
+        )
+        restored = RiskDecision.from_json(decision.to_json())
+        assert restored.decision == "APPROVED"
+        assert restored.checks_passed == ["position_size", "drawdown"]
+        assert restored.checks_failed == []
+
+
+# -----------------------------------------------------------------------
+# Enums
+# -----------------------------------------------------------------------
+
+class TestEnums:
+    def test_side_values(self):
+        assert Side.BUY.value == "BUY"
+        assert Side.SELL.value == "SELL"
+
+    def test_order_type_values(self):
+        assert OrderType.MARKET.value == "MARKET"
+        assert OrderType.LIMIT.value == "LIMIT"
+
+    def test_order_status_values(self):
+        assert OrderStatus.SUBMITTED.value == "SUBMITTED"
+        assert OrderStatus.FILLED.value == "FILLED"
+        assert OrderStatus.REJECTED.value == "REJECTED"
+        assert OrderStatus.CANCELLED.value == "CANCELLED"
+        assert OrderStatus.PARTIALLY_FILLED.value == "PARTIALLY_FILLED"
+
+
+# -----------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------
+
+class TestHelpers:
+    def test_now_ms_returns_int(self):
+        ts = now_ms()
+        assert isinstance(ts, int)
+
+    def test_now_ms_is_reasonable(self):
+        ts = now_ms()
+        # Should be after 2024-01-01 and before 2030-01-01
+        assert 1704067200000 < ts < 1893456000000
+
+    def test_now_ms_is_monotonic(self):
+        t1 = now_ms()
+        t2 = now_ms()
+        assert t2 >= t1
