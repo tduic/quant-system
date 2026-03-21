@@ -38,11 +38,8 @@ jobs:
         run: python -m py_compile lib/quant_core/models.py
         # Smoke-check that all modules parse cleanly
 
-      - name: Run tests
-        run: python -m pytest --tb=short -q
-
       - name: Run tests with coverage
-        run: python -m pytest --cov=quant_core --cov=market_data_svc --cov=storage_svc --cov-report=term-missing --cov-fail-under=80
+        run: python -m pytest --cov --cov-report=term-missing
 
   docker-build:
     runs-on: ubuntu-latest

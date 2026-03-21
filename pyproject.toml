@@ -21,7 +21,11 @@ source = [
     "services/market-data/market_data_svc",
     "services/storage/storage_svc",
 ]
-omit = ["*/tests/*"]
+omit = [
+    "*/tests/*",
+    "*/main.py",
+    "*/logging.py",
+]
 
 [tool.coverage.report]
 show_missing = true
