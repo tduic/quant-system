@@ -118,57 +118,64 @@ services:
     restart: unless-stopped
 
   # -------------------------------------------------------------------------
-  # Phase 2+ services (uncomment when implemented)
+  # Phase 2 services
   # -------------------------------------------------------------------------
 
-  # alpha-engine:
-  #   build:
-  #     context: .
-  #     dockerfile: services/alpha-engine/Dockerfile
-  #   container_name: quant-alpha-engine
-  #   depends_on:
-  #     kafka-init:
-  #       condition: service_completed_successfully
-  #     redis:
-  #       condition: service_healthy
-  #   environment:
-  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-  #     REDIS_URL: redis://redis:6379/0
-  #     SYMBOLS: "btcusd"
-  #     LOG_LEVEL: INFO
-  #   restart: unless-stopped
+  alpha-engine:
+    build:
+      context: .
+      dockerfile: services/alpha-engine/Dockerfile
+    container_name: quant-alpha-engine
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://redis:6379/0
+      SYMBOLS: "btcusd"
+      LOG_LEVEL: INFO
+    restart: unless-stopped
 
-  # risk-gateway:
-  #   build:
-  #     context: .
-  #     dockerfile: services/risk-gateway/Dockerfile
-  #   container_name: quant-risk-gateway
-  #   depends_on:
-  #     kafka-init:
-  #       condition: service_completed_successfully
-  #     redis:
-  #       condition: service_healthy
-  #   environment:
-  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-  #     REDIS_URL: redis://redis:6379/0
-  #     LOG_LEVEL: INFO
-  #   restart: unless-stopped
+  risk-gateway:
+    build:
+      context: .
+      dockerfile: services/risk-gateway/Dockerfile
+    container_name: quant-risk-gateway
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://redis:6379/0
+      MAX_POSITION_SIZE: "1.0"
+      MAX_ORDER_NOTIONAL: "100000"
+      MAX_DRAWDOWN_PCT: "0.05"
+      LOG_LEVEL: INFO
+    restart: unless-stopped
 
-  # execution:
-  #   build:
-  #     context: .
-  #     dockerfile: services/execution/Dockerfile
-  #   container_name: quant-execution
-  #   depends_on:
-  #     kafka-init:
-  #       condition: service_completed_successfully
-  #     redis:
-  #       condition: service_healthy
-  #   environment:
-  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-  #     REDIS_URL: redis://redis:6379/0
-  #     LOG_LEVEL: INFO
-  #   restart: unless-stopped
+  execution:
+    build:
+      context: .
+      dockerfile: services/execution/Dockerfile
+    container_name: quant-execution
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: INFO
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # Phase 4 services (uncomment when implemented)
+  # -------------------------------------------------------------------------
 
   # post-trade:
   #   build:
