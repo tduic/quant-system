@@ -8,6 +8,10 @@ testpaths = [
     "lib/quant_core/tests",
     "services/market-data/tests",
     "services/storage/tests",
+    "services/alpha-engine/tests",
+    "services/risk-gateway/tests",
+    "services/execution/tests",
+    "services/post-trade/tests",
 ]
 asyncio_mode = "auto"
 addopts = "-v --tb=short -q"
@@ -20,6 +24,10 @@ source = [
     "lib/quant_core",
     "services/market-data/market_data_svc",
     "services/storage/storage_svc",
+    "services/alpha-engine/alpha_engine_svc",
+    "services/risk-gateway/risk_gateway_svc",
+    "services/execution/execution_svc",
+    "services/post-trade/post_trade_svc",
 ]
 omit = [
     "*/tests/*",

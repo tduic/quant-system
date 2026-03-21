@@ -53,3 +53,15 @@ jobs:
 
       - name: Build storage image
         run: docker build -f services/storage/Dockerfile -t quant-storage .
+
+      - name: Build alpha-engine image
+        run: docker build -f services/alpha-engine/Dockerfile -t quant-alpha-engine .
+
+      - name: Build risk-gateway image
+        run: docker build -f services/risk-gateway/Dockerfile -t quant-risk-gateway .
+
+      - name: Build execution image
+        run: docker build -f services/execution/Dockerfile -t quant-execution .
+
+      - name: Build post-trade image
+        run: docker build -f services/post-trade/Dockerfile -t quant-post-trade .

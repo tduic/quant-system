@@ -117,6 +117,80 @@ services:
       LOG_LEVEL: INFO
     restart: unless-stopped
 
+  # -------------------------------------------------------------------------
+  # Phase 2+ services (uncomment when implemented)
+  # -------------------------------------------------------------------------
+
+  # alpha-engine:
+  #   build:
+  #     context: .
+  #     dockerfile: services/alpha-engine/Dockerfile
+  #   container_name: quant-alpha-engine
+  #   depends_on:
+  #     kafka-init:
+  #       condition: service_completed_successfully
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #     REDIS_URL: redis://redis:6379/0
+  #     SYMBOLS: "btcusd"
+  #     LOG_LEVEL: INFO
+  #   restart: unless-stopped
+
+  # risk-gateway:
+  #   build:
+  #     context: .
+  #     dockerfile: services/risk-gateway/Dockerfile
+  #   container_name: quant-risk-gateway
+  #   depends_on:
+  #     kafka-init:
+  #       condition: service_completed_successfully
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #     REDIS_URL: redis://redis:6379/0
+  #     LOG_LEVEL: INFO
+  #   restart: unless-stopped
+
+  # execution:
+  #   build:
+  #     context: .
+  #     dockerfile: services/execution/Dockerfile
+  #   container_name: quant-execution
+  #   depends_on:
+  #     kafka-init:
+  #       condition: service_completed_successfully
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #     REDIS_URL: redis://redis:6379/0
+  #     LOG_LEVEL: INFO
+  #   restart: unless-stopped
+
+  # post-trade:
+  #   build:
+  #     context: .
+  #     dockerfile: services/post-trade/Dockerfile
+  #   container_name: quant-post-trade
+  #   depends_on:
+  #     kafka-init:
+  #       condition: service_completed_successfully
+  #     timescaledb:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #     DATABASE_URL: postgresql://quant:quant_dev@timescaledb:5432/quantdb
+  #     REDIS_URL: redis://redis:6379/0
+  #     LOG_LEVEL: INFO
+  #   restart: unless-stopped
+
 volumes:
   timescale_data:
     driver: local

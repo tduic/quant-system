@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-watch
+.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-watch
 
 # Default target
 help: ## Show this help
@@ -128,6 +128,18 @@ test-market-data: ## Run market data service tests only
 
 test-storage: ## Run storage service tests only
 	python -m pytest services/storage/tests/ -v
+
+test-alpha: ## Run alpha engine tests only
+	python -m pytest services/alpha-engine/tests/ -v
+
+test-risk: ## Run risk gateway tests only
+	python -m pytest services/risk-gateway/tests/ -v
+
+test-execution: ## Run execution service tests only
+	python -m pytest services/execution/tests/ -v
+
+test-post-trade: ## Run post-trade service tests only
+	python -m pytest services/post-trade/tests/ -v
 
 test-watch: ## Run tests in watch mode (requires pytest-watch)
 	ptw -- -v --tb=short
