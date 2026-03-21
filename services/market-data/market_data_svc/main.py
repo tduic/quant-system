@@ -1,6 +1,6 @@
 """Market Data Service — entry point.
 
-Connects to Binance WebSocket, normalizes tick data, and publishes
+Connects to exchange WebSocket, normalizes tick data, and publishes
 to Kafka topics (raw.trades, raw.depth).
 """
 
@@ -16,7 +16,7 @@ from quant_core.kafka_utils import QProducer, TOPIC_HEARTBEAT
 from quant_core.logging import setup_logging
 from quant_core.models import now_ms
 
-from market_data_svc.binance_ws import BinanceWebSocket
+from market_data_svc.exchange_ws import ExchangeWebSocket
 from market_data_svc.normalizer import normalize_message
 from market_data_svc.publisher import MarketDataPublisher
 
@@ -45,7 +45,7 @@ async def main() -> None:
             publisher.publish(event)
 
     # Set up WebSocket connection
-    ws = BinanceWebSocket(symbols=config.symbols, on_message=on_message)
+    ws = ExchangeWebSocket(symbols=config.symbols, on_message=on_message)
 
     # Heartbeat task
     async def heartbeat_loop() -> None:

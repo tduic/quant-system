@@ -78,6 +78,49 @@ class Trade:
             is_buyer_maker=msg["m"],
         )
 
+    @classmethod
+    def from_coinbase(cls, msg: dict, ingested_at: int) -> Trade:
+        """Parse a Coinbase WebSocket match message.
+
+        Coinbase 'match' format:
+        {
+            "type": "match",
+            "trade_id": 123456,
+            "product_id": "BTC-USD",
+            "price": "42000.50",
+            "size": "0.001",
+            "side": "buy",       # taker side
+            "time": "2026-03-21T12:00:00.000000Z"
+        }
+        """
+        # Coinbase gives ISO timestamp — convert to epoch ms
+        time_str = msg.get("time", "")
+        try:
+            dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+            ts_ms = int(dt.timestamp() * 1000)
+        except (ValueError, AttributeError):
+            ts_ms = ingested_at
+
+        # Coinbase "side" is the taker's side.
+        # is_buyer_maker = True when the taker is selling (maker was the buyer)
+        taker_side = msg.get("side", "").lower()
+        is_buyer_maker = taker_side == "sell"
+
+        # Normalize product_id: "BTC-USD" -> "BTCUSD"
+        product_id = msg.get("product_id", "")
+        symbol = product_id.replace("-", "")
+
+        return cls(
+            exchange="coinbase",
+            symbol=symbol,
+            trade_id=msg.get("trade_id", 0),
+            price=float(msg.get("price", 0)),
+            quantity=float(msg.get("size", 0)),
+            timestamp_exchange=ts_ms,
+            timestamp_ingested=ingested_at,
+            is_buyer_maker=is_buyer_maker,
+        )
+
 
 @dataclass
 class DepthUpdate:
@@ -112,6 +155,51 @@ class DepthUpdate:
             bids=[[float(p), float(q)] for p, q in msg.get("b", [])],
             asks=[[float(p), float(q)] for p, q in msg.get("a", [])],
             timestamp_exchange=msg.get("E", 0),
+            timestamp_ingested=ingested_at,
+        )
+
+    @classmethod
+    def from_coinbase(cls, msg: dict, ingested_at: int) -> DepthUpdate:
+        """Parse a Coinbase WebSocket l2update message.
+
+        Coinbase 'l2update' format:
+        {
+            "type": "l2update",
+            "product_id": "BTC-USD",
+            "time": "2026-03-21T12:00:00.000000Z",
+            "changes": [
+                ["buy",  "42000.50", "0.5"],   // [side, price, new_size]
+                ["sell", "42001.00", "0.3"],
+            ]
+        }
+        """
+        time_str = msg.get("time", "")
+        try:
+            dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+            ts_ms = int(dt.timestamp() * 1000)
+        except (ValueError, AttributeError):
+            ts_ms = ingested_at
+
+        product_id = msg.get("product_id", "")
+        symbol = product_id.replace("-", "")
+
+        bids = []
+        asks = []
+        for change in msg.get("changes", []):
+            side, price, size = change[0], float(change[1]), float(change[2])
+            if side == "buy":
+                bids.append([price, size])
+            else:
+                asks.append([price, size])
+
+        return cls(
+            exchange="coinbase",
+            symbol=symbol,
+            first_update_id=0,
+            final_update_id=0,
+            bids=bids,
+            asks=asks,
+            timestamp_exchange=ts_ms,
             timestamp_ingested=ingested_at,
         )
 

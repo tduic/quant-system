@@ -116,7 +116,95 @@ class TestTrade:
 
 
 # -----------------------------------------------------------------------
-# DepthUpdate
+# Coinbase Trade parsing
+# -----------------------------------------------------------------------
+
+class TestTradeCoinbase:
+    @pytest.fixture
+    def coinbase_match(self) -> dict:
+        return {
+            "type": "match",
+            "trade_id": 999,
+            "product_id": "BTC-USD",
+            "price": "42150.50",
+            "size": "0.001",
+            "side": "buy",
+            "time": "2026-03-21T12:00:00.000000Z",
+        }
+
+    def test_from_coinbase_parses_all_fields(self, coinbase_match: dict):
+        trade = Trade.from_coinbase(coinbase_match, 1672515782140)
+        assert trade.exchange == "coinbase"
+        assert trade.symbol == "BTCUSD"
+        assert trade.trade_id == 999
+        assert trade.price == pytest.approx(42150.50)
+        assert trade.quantity == pytest.approx(0.001)
+        assert trade.timestamp_ingested == 1672515782140
+
+    def test_from_coinbase_buy_taker_means_not_buyer_maker(self, coinbase_match: dict):
+        trade = Trade.from_coinbase(coinbase_match, 0)
+        assert trade.is_buyer_maker is False
+
+    def test_from_coinbase_sell_taker_means_buyer_maker(self, coinbase_match: dict):
+        coinbase_match["side"] = "sell"
+        trade = Trade.from_coinbase(coinbase_match, 0)
+        assert trade.is_buyer_maker is True
+
+    def test_from_coinbase_parses_iso_timestamp(self, coinbase_match: dict):
+        trade = Trade.from_coinbase(coinbase_match, 0)
+        assert trade.timestamp_exchange > 0
+
+    def test_from_coinbase_symbol_strips_dash(self, coinbase_match: dict):
+        coinbase_match["product_id"] = "ETH-USD"
+        trade = Trade.from_coinbase(coinbase_match, 0)
+        assert trade.symbol == "ETHUSD"
+
+    def test_from_coinbase_roundtrip(self, coinbase_match: dict):
+        original = Trade.from_coinbase(coinbase_match, 1000)
+        restored = Trade.from_json(original.to_json())
+        assert restored.symbol == "BTCUSD"
+        assert restored.exchange == "coinbase"
+        assert restored.price == pytest.approx(42150.50)
+
+
+# -----------------------------------------------------------------------
+# Coinbase DepthUpdate parsing
+# -----------------------------------------------------------------------
+
+class TestDepthUpdateCoinbase:
+    @pytest.fixture
+    def coinbase_l2update(self) -> dict:
+        return {
+            "type": "l2update",
+            "product_id": "BTC-USD",
+            "time": "2026-03-21T12:00:00.100000Z",
+            "changes": [
+                ["buy", "42150.00", "1.5"],
+                ["sell", "42151.00", "0.8"],
+            ],
+        }
+
+    def test_from_coinbase_parses_sides(self, coinbase_l2update: dict):
+        depth = DepthUpdate.from_coinbase(coinbase_l2update, 0)
+        assert len(depth.bids) == 1
+        assert len(depth.asks) == 1
+        assert depth.bids[0][0] == pytest.approx(42150.00)
+        assert depth.asks[0][0] == pytest.approx(42151.00)
+
+    def test_from_coinbase_symbol(self, coinbase_l2update: dict):
+        depth = DepthUpdate.from_coinbase(coinbase_l2update, 0)
+        assert depth.symbol == "BTCUSD"
+        assert depth.exchange == "coinbase"
+
+    def test_from_coinbase_empty_changes(self, coinbase_l2update: dict):
+        coinbase_l2update["changes"] = []
+        depth = DepthUpdate.from_coinbase(coinbase_l2update, 0)
+        assert depth.bids == []
+        assert depth.asks == []
+
+
+# -----------------------------------------------------------------------
+# DepthUpdate (Binance)
 # -----------------------------------------------------------------------
 
 class TestDepthUpdate:

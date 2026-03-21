@@ -1,8 +1,7 @@
-"""Normalize raw Binance messages into internal canonical format.
+"""Normalize raw exchange messages into internal canonical format.
 
-Each exchange adapter has its own normalizer. This one handles Binance's
-trade and depth stream formats and converts them to our Trade and DepthUpdate
-dataclasses.
+Each exchange adapter has its own parsing logic. This module dispatches
+based on message format and converts to our Trade and DepthUpdate dataclasses.
 """
 
 from __future__ import annotations
@@ -15,11 +14,26 @@ logger = logging.getLogger(__name__)
 
 
 def normalize_message(raw: dict) -> Trade | DepthUpdate | None:
-    """Normalize a raw Binance WebSocket message.
+    """Normalize a raw WebSocket message from any supported exchange.
+
+    Currently supports:
+    - Coinbase: "match" / "last_match" -> Trade, "l2update" -> DepthUpdate
+    - Binance: "trade" -> Trade, "depthUpdate" -> DepthUpdate
 
     Returns a Trade or DepthUpdate, or None if the message type is unrecognized.
     """
     ingested_at = now_ms()
+
+    # Coinbase messages use "type" field
+    msg_type = raw.get("type", "")
+
+    if msg_type in ("match", "last_match"):
+        return Trade.from_coinbase(raw, ingested_at)
+
+    elif msg_type == "l2update":
+        return DepthUpdate.from_coinbase(raw, ingested_at)
+
+    # Binance messages use "e" field
     event_type = raw.get("e", "")
 
     if event_type == "trade":
@@ -28,7 +42,5 @@ def normalize_message(raw: dict) -> Trade | DepthUpdate | None:
     elif event_type == "depthUpdate":
         return DepthUpdate.from_binance(raw, ingested_at)
 
-    else:
-        # Unknown event type — log and skip
-        logger.debug("Skipping unknown event type: %s", event_type)
-        return None
+    logger.debug("Skipping unknown message type: %s / %s", msg_type, event_type)
+    return None

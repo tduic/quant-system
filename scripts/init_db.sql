@@ -21,9 +21,9 @@ CREATE TABLE IF NOT EXISTS symbols (
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed BTC/USDT
+-- Seed BTC/USD (Coinbase)
 INSERT INTO symbols (symbol, exchange, base_asset, quote_asset, tick_size, lot_size)
-VALUES ('BTCUSDT', 'binance', 'BTC', 'USDT', 0.01, 0.00001)
+VALUES ('BTCUSD', 'coinbase', 'BTC', 'USD', 0.01, 0.00000001)
 ON CONFLICT (symbol) DO NOTHING;
 
 -- ==========================================================================
@@ -107,9 +107,9 @@ CREATE INDEX IF NOT EXISTS idx_orders_backtest
 -- ==========================================================================
 
 CREATE TABLE IF NOT EXISTS fills (
-    fill_id         UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    fill_id         UUID            NOT NULL DEFAULT gen_random_uuid(),
     time            TIMESTAMPTZ     NOT NULL,
-    order_id        UUID            NOT NULL REFERENCES orders(order_id),
+    order_id        UUID            NOT NULL,
     symbol          VARCHAR(20)     NOT NULL,
     side            VARCHAR(4)      NOT NULL,
     quantity        DECIMAL(18,8)   NOT NULL,
@@ -117,7 +117,8 @@ CREATE TABLE IF NOT EXISTS fills (
     fee             DECIMAL(18,8)   DEFAULT 0,
     slippage_bps    DECIMAL(10,4),
     backtest_id     UUID,
-    strategy_id     VARCHAR(50)
+    strategy_id     VARCHAR(50),
+    PRIMARY KEY (fill_id, time)
 );
 
 SELECT create_hypertable('fills', 'time',
@@ -162,49 +163,51 @@ SELECT add_continuous_aggregate_policy('ohlcv_1m',
     if_not_exists   => TRUE
 );
 
--- 1-hour OHLCV from 1-minute bars (hierarchical)
+-- 1-hour OHLCV (built directly from trades — no hierarchical dependency)
 CREATE MATERIALIZED VIEW IF NOT EXISTS ohlcv_1h
 WITH (timescaledb.continuous) AS
 SELECT
-    time_bucket('1 hour', bucket)   AS bucket,
+    time_bucket('1 hour', time)     AS bucket,
     symbol,
-    first(open, bucket)             AS open,
-    max(high)                       AS high,
-    min(low)                        AS low,
-    last(close, bucket)             AS close,
-    sum(volume)                     AS volume,
-    sum(trade_count)                AS trade_count,
-    sum(quote_volume)               AS quote_volume
-FROM ohlcv_1m
-GROUP BY time_bucket('1 hour', bucket), symbol
+    first(price, time)              AS open,
+    max(price)                      AS high,
+    min(price)                      AS low,
+    last(price, time)               AS close,
+    sum(quantity)                    AS volume,
+    count(*)                        AS trade_count,
+    sum(price * quantity)           AS quote_volume
+FROM trades
+WHERE backtest_id IS NULL
+GROUP BY bucket, symbol
 WITH NO DATA;
 
 SELECT add_continuous_aggregate_policy('ohlcv_1h',
-    start_offset    => INTERVAL '2 hours',
+    start_offset    => INTERVAL '4 hours',
     end_offset      => INTERVAL '1 hour',
     schedule_interval => INTERVAL '1 hour',
     if_not_exists   => TRUE
 );
 
--- 1-day OHLCV from 1-hour bars
+-- 1-day OHLCV (built directly from trades)
 CREATE MATERIALIZED VIEW IF NOT EXISTS ohlcv_1d
 WITH (timescaledb.continuous) AS
 SELECT
-    time_bucket('1 day', bucket)    AS bucket,
+    time_bucket('1 day', time)      AS bucket,
     symbol,
-    first(open, bucket)             AS open,
-    max(high)                       AS high,
-    min(low)                        AS low,
-    last(close, bucket)             AS close,
-    sum(volume)                     AS volume,
-    sum(trade_count)                AS trade_count,
-    sum(quote_volume)               AS quote_volume
-FROM ohlcv_1h
-GROUP BY time_bucket('1 day', bucket), symbol
+    first(price, time)              AS open,
+    max(price)                      AS high,
+    min(price)                      AS low,
+    last(price, time)               AS close,
+    sum(quantity)                    AS volume,
+    count(*)                        AS trade_count,
+    sum(price * quantity)           AS quote_volume
+FROM trades
+WHERE backtest_id IS NULL
+GROUP BY bucket, symbol
 WITH NO DATA;
 
 SELECT add_continuous_aggregate_policy('ohlcv_1d',
-    start_offset    => INTERVAL '2 days',
+    start_offset    => INTERVAL '4 days',
     end_offset      => INTERVAL '1 day',
     schedule_interval => INTERVAL '1 day',
     if_not_exists   => TRUE

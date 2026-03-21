@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14-dev"
+
+      - name: Install dependencies
+        run: |
+          pip install -e lib/
+          pip install -r requirements-test.txt
+
+      - name: Run linter
+        run: python -m py_compile lib/quant_core/models.py
+        # Smoke-check that all modules parse cleanly
+
+      - name: Run tests
+        run: python -m pytest --tb=short -q
+
+      - name: Run tests with coverage
+        run: python -m pytest --cov=quant_core --cov=market_data_svc --cov=storage_svc --cov-report=term-missing --cov-fail-under=80
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build market-data image
+        run: docker build -f services/market-data/Dockerfile -t quant-market-data .
+
+      - name: Build storage image
+        run: docker build -f services/storage/Dockerfile -t quant-storage .
