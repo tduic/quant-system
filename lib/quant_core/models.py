@@ -6,30 +6,28 @@ All timestamps are in milliseconds since epoch (UTC).
 
 from __future__ import annotations
 
-import uuid
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any
-
 import json
-
+import uuid
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from enum import StrEnum
 
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
 
-class Side(str, Enum):
+
+class Side(StrEnum):
     BUY = "BUY"
     SELL = "SELL"
 
 
-class OrderType(str, Enum):
+class OrderType(StrEnum):
     MARKET = "MARKET"
     LIMIT = "LIMIT"
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     SUBMITTED = "SUBMITTED"
     ACCEPTED = "ACCEPTED"
     FILLED = "FILLED"
@@ -42,6 +40,7 @@ class OrderStatus(str, Enum):
 # Market Data Events
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Trade:
     """A single trade tick from an exchange."""
@@ -52,8 +51,8 @@ class Trade:
     trade_id: int = 0
     price: float = 0.0
     quantity: float = 0.0
-    timestamp_exchange: int = 0       # ms since epoch
-    timestamp_ingested: int = 0       # ms since epoch
+    timestamp_exchange: int = 0  # ms since epoch
+    timestamp_ingested: int = 0  # ms since epoch
     is_buyer_maker: bool = False
 
     def to_json(self) -> str:
@@ -98,7 +97,7 @@ class Trade:
         try:
             dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
             ts_ms = int(dt.timestamp() * 1000)
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             ts_ms = ingested_at
 
         # Coinbase "side" is the taker's side.
@@ -177,7 +176,7 @@ class DepthUpdate:
         try:
             dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
             ts_ms = int(dt.timestamp() * 1000)
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             ts_ms = ingested_at
 
         product_id = msg.get("product_id", "")
@@ -208,6 +207,7 @@ class DepthUpdate:
 # Signal Events
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Signal:
     """A trading signal emitted by the Alpha Engine."""
@@ -216,10 +216,10 @@ class Signal:
     timestamp: int = 0
     strategy_id: str = ""
     symbol: str = ""
-    side: str = ""          # Side enum value
-    strength: float = 0.0   # -1.0 to 1.0
+    side: str = ""  # Side enum value
+    strength: float = 0.0  # -1.0 to 1.0
     target_quantity: float = 0.0
-    urgency: float = 0.5    # 0.0 to 1.0
+    urgency: float = 0.5  # 0.0 to 1.0
     metadata: dict = field(default_factory=dict)
     mid_price_at_signal: float = 0.0
     spread_at_signal: float = 0.0
@@ -235,6 +235,7 @@ class Signal:
 # ---------------------------------------------------------------------------
 # Order / Fill Events
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Order:
@@ -288,12 +289,13 @@ class Fill:
 # Risk Events
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RiskDecision:
     """A risk check decision from the Risk Gateway."""
 
     signal_id: str = ""
-    decision: str = ""          # "APPROVED" or "REJECTED"
+    decision: str = ""  # "APPROVED" or "REJECTED"
     reason: str = ""
     adjusted_quantity: float = 0.0
     timestamp: int = 0
@@ -312,6 +314,7 @@ class RiskDecision:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def now_ms() -> int:
     """Current UTC time in milliseconds since epoch."""
-    return int(datetime.now(timezone.utc).timestamp() * 1000)
+    return int(datetime.now(UTC).timestamp() * 1000)

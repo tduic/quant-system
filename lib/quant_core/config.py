@@ -25,15 +25,9 @@ class KafkaConfig:
     @classmethod
     def from_env(cls, prefix: str = "") -> KafkaConfig:
         return cls(
-            bootstrap_servers=os.getenv(
-                f"{prefix}KAFKA_BOOTSTRAP_SERVERS", cls.bootstrap_servers
-            ),
-            consumer_group_id=os.getenv(
-                f"{prefix}KAFKA_CONSUMER_GROUP", cls.consumer_group_id
-            ),
-            consumer_auto_offset_reset=os.getenv(
-                f"{prefix}KAFKA_AUTO_OFFSET_RESET", cls.consumer_auto_offset_reset
-            ),
+            bootstrap_servers=os.getenv(f"{prefix}KAFKA_BOOTSTRAP_SERVERS", cls.bootstrap_servers),
+            consumer_group_id=os.getenv(f"{prefix}KAFKA_CONSUMER_GROUP", cls.consumer_group_id),
+            consumer_auto_offset_reset=os.getenv(f"{prefix}KAFKA_AUTO_OFFSET_RESET", cls.consumer_auto_offset_reset),
         )
 
 

@@ -38,3 +38,29 @@ omit = [
 [tool.coverage.report]
 show_missing = true
 fail_under = 80
+
+[tool.ruff]
+target-version = "py314"
+line-length = 120
+exclude = ["venv", ".git", "__pycache__", "*.egg-info"]
+
+[tool.ruff.lint]
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort
+    "N",     # pep8-naming
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "SIM",   # flake8-simplify
+    "TCH",   # flake8-type-checking
+    "RUF",   # ruff-specific rules
+]
+ignore = [
+    "E501",  # line too long (handled by formatter)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["quant_core", "market_data_svc", "storage_svc", "alpha_engine_svc", "risk_gateway_svc", "execution_svc", "post_trade_svc"]

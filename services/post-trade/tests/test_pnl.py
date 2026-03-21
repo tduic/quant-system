@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from post_trade_svc.pnl import Position, PortfolioPnL
+from post_trade_svc.pnl import PortfolioPnL, Position
 
 
 class TestPositionApplyFill:

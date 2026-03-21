@@ -8,24 +8,21 @@ approved orders or rejection events.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import signal
 
 from quant_core.config import AppConfig
 from quant_core.kafka_utils import (
-    QConsumer,
-    QProducer,
-    TOPIC_SIGNALS,
+    TOPIC_HEARTBEAT,
     TOPIC_ORDERS,
     TOPIC_RISK_EVENTS,
-    TOPIC_HEARTBEAT,
+    TOPIC_SIGNALS,
+    QConsumer,
+    QProducer,
 )
 from quant_core.logging import setup_logging
-from quant_core.models import Signal, Order, now_ms
-from quant_core.redis_utils import Keys
-
+from quant_core.models import Order, Signal, now_ms
 from risk_gateway_svc.risk_checks import (
     PortfolioState,
     RiskLimits,
@@ -68,7 +65,8 @@ async def main() -> None:
     limits = _load_risk_limits()
     logger.info(
         "Risk limits: pos=%.2f, notional=%.0f, drawdown=%.1f%%",
-        limits.max_position_size, limits.max_order_notional,
+        limits.max_position_size,
+        limits.max_order_notional,
         limits.max_drawdown_pct * 100,
     )
 
@@ -158,19 +156,24 @@ async def main() -> None:
                 )
                 logger.info(
                     "APPROVED: %s %s %.6f %s",
-                    order.side, order.symbol, order.quantity, order.strategy_id,
+                    order.side,
+                    order.symbol,
+                    order.quantity,
+                    order.strategy_id,
                 )
             else:
                 rejected_count += 1
                 logger.info(
                     "REJECTED: %s %s — %s",
-                    sig.side, sig.symbol, decision.reason,
+                    sig.side,
+                    sig.symbol,
+                    decision.reason,
                 )
 
             producer.poll(0.0)
 
     loop = asyncio.get_event_loop()
-    consume_task = loop.run_in_executor(None, consume_loop)
+    loop.run_in_executor(None, consume_loop)
 
     await shutdown_event.wait()
 

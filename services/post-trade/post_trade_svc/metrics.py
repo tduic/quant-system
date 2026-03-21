@@ -97,4 +97,4 @@ def _std(values: list[float]) -> float:
         return 0.0
     mean = sum(values) / n
     variance = sum((v - mean) ** 2 for v in values) / n
-    return variance ** 0.5
+    return variance**0.5

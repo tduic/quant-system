@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from quant_core.redis_utils import Keys
 
 

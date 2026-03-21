@@ -7,25 +7,23 @@ via pluggable strategies, and publishes trade signals.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import signal
 
+from alpha_engine_svc.order_book import OrderBook
+from alpha_engine_svc.strategies.mean_reversion import MeanReversionStrategy
+from alpha_engine_svc.strategy import StrategyRegistry
 from quant_core.config import AppConfig
 from quant_core.kafka_utils import (
+    TOPIC_HEARTBEAT,
+    TOPIC_RAW_DEPTH,
+    TOPIC_RAW_TRADES,
+    TOPIC_SIGNALS,
     QConsumer,
     QProducer,
-    TOPIC_RAW_TRADES,
-    TOPIC_RAW_DEPTH,
-    TOPIC_SIGNALS,
-    TOPIC_HEARTBEAT,
 )
 from quant_core.logging import setup_logging
-from quant_core.models import Trade, DepthUpdate, now_ms
-
-from alpha_engine_svc.order_book import OrderBook
-from alpha_engine_svc.strategy import StrategyRegistry
-from alpha_engine_svc.strategies.mean_reversion import MeanReversionStrategy
+from quant_core.models import DepthUpdate, Trade, now_ms
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +122,9 @@ async def main() -> None:
                         signal_count += 1
                         logger.info(
                             "Signal emitted: %s %s %s (z=%.2f)",
-                            sig.side, sig.symbol, sig.strategy_id,
+                            sig.side,
+                            sig.symbol,
+                            sig.strategy_id,
                             sig.metadata.get("z_score", 0),
                         )
 
@@ -145,7 +145,7 @@ async def main() -> None:
 
     # Run blocking consume in a thread
     loop = asyncio.get_event_loop()
-    consume_task = loop.run_in_executor(None, consume_loop)
+    loop.run_in_executor(None, consume_loop)
 
     await shutdown_event.wait()
 

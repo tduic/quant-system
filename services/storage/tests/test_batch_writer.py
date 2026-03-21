@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import asyncio
 import time
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from storage_svc.batch_writer import BatchWriter, PendingTrade, PendingBookSnapshot
-
+from storage_svc.batch_writer import BatchWriter, PendingBookSnapshot, PendingTrade
 
 # -----------------------------------------------------------------------
 # Fixtures
 # -----------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_conn() -> AsyncMock:
@@ -45,7 +44,7 @@ def make_trade(
     trade_id: int = 1,
 ) -> PendingTrade:
     return PendingTrade(
-        time=datetime.now(timezone.utc),
+        time=datetime.now(UTC),
         symbol=symbol,
         trade_id=trade_id,
         price=price,
@@ -58,7 +57,7 @@ def make_trade(
 
 def make_book_snapshot(symbol: str = "BTCUSDT") -> PendingBookSnapshot:
     return PendingBookSnapshot(
-        time=datetime.now(timezone.utc),
+        time=datetime.now(UTC),
         symbol=symbol,
         bid_prices=[42000.0, 41999.5],
         bid_sizes=[1.0, 2.0],
@@ -73,6 +72,7 @@ def make_book_snapshot(symbol: str = "BTCUSDT") -> PendingBookSnapshot:
 # -----------------------------------------------------------------------
 # Buffer management
 # -----------------------------------------------------------------------
+
 
 class TestBufferManagement:
     def test_add_trade_increments_buffer(self, writer: BatchWriter):
@@ -95,6 +95,7 @@ class TestBufferManagement:
 # -----------------------------------------------------------------------
 # should_flush logic
 # -----------------------------------------------------------------------
+
 
 class TestShouldFlush:
     def test_empty_buffer_should_not_flush(self, writer: BatchWriter):
@@ -128,6 +129,7 @@ class TestShouldFlush:
 # -----------------------------------------------------------------------
 # Flush behavior
 # -----------------------------------------------------------------------
+
 
 class TestFlush:
     @pytest.mark.asyncio
@@ -167,17 +169,13 @@ class TestFlush:
         assert writer.stats["total_trades_written"] == 3
 
     @pytest.mark.asyncio
-    async def test_flush_empty_buffer_is_noop(
-        self, writer: BatchWriter, mock_pool: AsyncMock
-    ):
+    async def test_flush_empty_buffer_is_noop(self, writer: BatchWriter, mock_pool: AsyncMock):
         await writer.flush()
         # Pool should not be accessed if nothing to flush
         mock_pool.acquire.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_flush_calls_copy_records_for_trades(
-        self, writer: BatchWriter, mock_conn: AsyncMock
-    ):
+    async def test_flush_calls_copy_records_for_trades(self, writer: BatchWriter, mock_conn: AsyncMock):
         writer.add_trade(make_trade())
         await writer.flush()
 
@@ -197,9 +195,10 @@ class TestFlush:
 # PendingTrade / PendingBookSnapshot data integrity
 # -----------------------------------------------------------------------
 
+
 class TestPendingModels:
     def test_pending_trade_fields(self):
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         trade = PendingTrade(
             time=now,
             symbol="ETHUSDT",

@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import abc
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from quant_core.models import Trade, DepthUpdate, Signal
+if TYPE_CHECKING:
+    from quant_core.models import DepthUpdate, Signal, Trade
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +35,8 @@ class BaseStrategy(abc.ABC):
         """Process an order book update. Return a Signal if the strategy wants to act."""
         ...
 
-    def on_signal_fill(self, signal_id: str, fill_price: float) -> None:
+    def on_signal_fill(self, signal_id: str, fill_price: float) -> None:  # noqa: B027
         """Callback when a signal results in a fill. Used for strategy state updates."""
-        pass
 
 
 class StrategyRegistry:

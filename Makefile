@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-watch
+.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-watch lint lint-fix format
 
 # Default target
 help: ## Show this help
@@ -143,6 +143,20 @@ test-post-trade: ## Run post-trade service tests only
 
 test-watch: ## Run tests in watch mode (requires pytest-watch)
 	ptw -- -v --tb=short
+
+# ---------------------------------------------------------------------------
+# Linting & Formatting
+# ---------------------------------------------------------------------------
+
+lint: ## Check code with ruff (no changes)
+	ruff check lib/ services/ conftest.py
+	ruff format --check lib/ services/ conftest.py
+
+lint-fix: ## Auto-fix linting issues
+	ruff check --fix lib/ services/ conftest.py
+
+format: ## Format code with ruff
+	ruff format lib/ services/ conftest.py
 
 # ---------------------------------------------------------------------------
 # Cleanup

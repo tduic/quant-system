@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import redis.asyncio as aioredis
 import redis as sync_redis
+import redis.asyncio as aioredis
 
-from quant_core.config import RedisConfig
+if TYPE_CHECKING:
+    from quant_core.config import RedisConfig
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Key schema constants
 # ---------------------------------------------------------------------------
+
 
 class Keys:
     """Centralized Redis key templates."""
@@ -83,6 +85,7 @@ class Keys:
 # Connection factories
 # ---------------------------------------------------------------------------
 
+
 def create_async_redis(config: RedisConfig) -> aioredis.Redis:
     """Create an async Redis connection."""
     return aioredis.from_url(
@@ -105,9 +108,8 @@ def create_sync_redis(config: RedisConfig) -> sync_redis.Redis:
 # Convenience helpers
 # ---------------------------------------------------------------------------
 
-async def async_hset_dict(
-    r: aioredis.Redis, key: str, data: dict[str, Any]
-) -> None:
+
+async def async_hset_dict(r: aioredis.Redis, key: str, data: dict[str, Any]) -> None:
     """Write a dict as a Redis hash, JSON-encoding non-string values."""
     flat = {}
     for k, v in data.items():

@@ -7,10 +7,9 @@ using the symbol as the partition key (ensures per-symbol ordering).
 from __future__ import annotations
 
 import logging
-from typing import Any
 
-from quant_core.kafka_utils import QProducer, TOPIC_RAW_TRADES, TOPIC_RAW_DEPTH
-from quant_core.models import Trade, DepthUpdate
+from quant_core.kafka_utils import TOPIC_RAW_DEPTH, TOPIC_RAW_TRADES, QProducer
+from quant_core.models import DepthUpdate, Trade
 
 logger = logging.getLogger(__name__)
 

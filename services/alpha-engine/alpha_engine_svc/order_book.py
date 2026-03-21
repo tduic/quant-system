@@ -7,10 +7,10 @@ module in Phase 6 without changing the interface.
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
-from typing import Any
+from typing import TYPE_CHECKING
 
-from quant_core.models import DepthUpdate
+if TYPE_CHECKING:
+    from quant_core.models import DepthUpdate
 
 logger = logging.getLogger(__name__)
 

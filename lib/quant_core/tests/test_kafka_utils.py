@@ -2,27 +2,25 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch, call
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from quant_core.config import KafkaConfig
 from quant_core.kafka_utils import (
-    QProducer,
-    QConsumer,
-    TOPIC_RAW_TRADES,
-    TOPIC_RAW_DEPTH,
-    TOPIC_SIGNALS,
-    TOPIC_ORDERS,
     TOPIC_FILLS,
-    TOPIC_RISK_EVENTS,
     TOPIC_HEARTBEAT,
+    TOPIC_ORDERS,
+    TOPIC_RAW_DEPTH,
+    TOPIC_RAW_TRADES,
+    TOPIC_RISK_EVENTS,
+    TOPIC_SIGNALS,
+    QConsumer,
+    QProducer,
 )
-
 
 # -----------------------------------------------------------------------
 # Topic constants
 # -----------------------------------------------------------------------
+
 
 class TestTopicNames:
     def test_all_topic_names_defined(self):
@@ -38,6 +36,7 @@ class TestTopicNames:
 # -----------------------------------------------------------------------
 # QProducer
 # -----------------------------------------------------------------------
+
 
 class TestQProducer:
     @patch("quant_core.kafka_utils.Producer")
@@ -140,6 +139,7 @@ class TestQProducer:
 # QConsumer — unpack
 # -----------------------------------------------------------------------
 
+
 class TestQConsumerUnpack:
     def test_unpack_extracts_fields(self):
         mock_msg = MagicMock()
@@ -162,7 +162,7 @@ class TestQConsumerUnpack:
         mock_msg.value.return_value = b"data"
         mock_msg.headers.return_value = None
 
-        topic, key, value, headers = QConsumer._unpack(mock_msg)
+        _topic, key, _value, headers = QConsumer._unpack(mock_msg)
 
         assert key is None
         assert headers == {}

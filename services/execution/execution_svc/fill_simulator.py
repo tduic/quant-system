@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from quant_core.models import Order, Fill, now_ms
+from quant_core.models import Fill, Order, now_ms
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +44,7 @@ class FillSimulator:
         """
         half_spread = spread / 2.0
 
-        if order.side == "BUY":
-            fill_price = mid_price + half_spread
-        else:
-            fill_price = mid_price - half_spread
+        fill_price = mid_price + half_spread if order.side == "BUY" else mid_price - half_spread
 
         # Slippage in basis points vs mid price
         slippage_bps = abs(fill_price - mid_price) / mid_price * 10_000

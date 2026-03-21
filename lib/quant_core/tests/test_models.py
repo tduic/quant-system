@@ -4,27 +4,26 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
 
 import pytest
 
 from quant_core.models import (
-    Trade,
     DepthUpdate,
-    Signal,
-    Order,
     Fill,
+    Order,
+    OrderStatus,
+    OrderType,
     RiskDecision,
     Side,
-    OrderType,
-    OrderStatus,
+    Signal,
+    Trade,
     now_ms,
 )
-
 
 # -----------------------------------------------------------------------
 # Fixtures: raw Binance messages
 # -----------------------------------------------------------------------
+
 
 @pytest.fixture
 def binance_trade_msg() -> dict:
@@ -61,6 +60,7 @@ def binance_depth_msg() -> dict:
 # -----------------------------------------------------------------------
 # Trade
 # -----------------------------------------------------------------------
+
 
 class TestTrade:
     def test_from_binance_parses_all_fields(self, binance_trade_msg: dict):
@@ -119,6 +119,7 @@ class TestTrade:
 # Coinbase Trade parsing
 # -----------------------------------------------------------------------
 
+
 class TestTradeCoinbase:
     @pytest.fixture
     def coinbase_match(self) -> dict:
@@ -171,6 +172,7 @@ class TestTradeCoinbase:
 # Coinbase DepthUpdate parsing
 # -----------------------------------------------------------------------
 
+
 class TestDepthUpdateCoinbase:
     @pytest.fixture
     def coinbase_l2update(self) -> dict:
@@ -206,6 +208,7 @@ class TestDepthUpdateCoinbase:
 # -----------------------------------------------------------------------
 # DepthUpdate (Binance)
 # -----------------------------------------------------------------------
+
 
 class TestDepthUpdate:
     def test_from_binance_parses_all_fields(self, binance_depth_msg: dict):
@@ -258,6 +261,7 @@ class TestDepthUpdate:
 # Signal
 # -----------------------------------------------------------------------
 
+
 class TestSignal:
     def test_signal_generates_uuid(self):
         s1 = Signal()
@@ -293,6 +297,7 @@ class TestSignal:
 # Order
 # -----------------------------------------------------------------------
 
+
 class TestOrder:
     def test_order_defaults(self):
         order = Order()
@@ -319,6 +324,7 @@ class TestOrder:
 # Fill
 # -----------------------------------------------------------------------
 
+
 class TestFill:
     def test_fill_roundtrip(self):
         fill = Fill(
@@ -341,6 +347,7 @@ class TestFill:
 # RiskDecision
 # -----------------------------------------------------------------------
 
+
 class TestRiskDecision:
     def test_risk_decision_roundtrip(self):
         decision = RiskDecision(
@@ -360,6 +367,7 @@ class TestRiskDecision:
 # -----------------------------------------------------------------------
 # Enums
 # -----------------------------------------------------------------------
+
 
 class TestEnums:
     def test_side_values(self):
@@ -381,6 +389,7 @@ class TestEnums:
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------
+
 
 class TestHelpers:
     def test_now_ms_returns_int(self):

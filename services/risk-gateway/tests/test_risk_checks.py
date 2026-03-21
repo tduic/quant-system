@@ -8,9 +8,9 @@ from quant_core.models import Signal
 from risk_gateway_svc.risk_checks import (
     PortfolioState,
     RiskLimits,
-    check_position_size,
-    check_order_notional,
     check_drawdown,
+    check_order_notional,
+    check_position_size,
     run_risk_checks,
 )
 

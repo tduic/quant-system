@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from post_trade_svc.metrics import (
+    compute_calmar,
+    compute_max_drawdown,
     compute_sharpe,
     compute_sortino,
-    compute_max_drawdown,
-    compute_calmar,
-    ANNUAL_FACTOR,
 )
 
 
@@ -84,7 +81,7 @@ class TestMaxDrawdown:
 
     def test_multiple_drawdowns_returns_max(self):
         equity = [100, 95, 100, 80, 90, 100]
-        dd, dur = compute_max_drawdown(equity)
+        dd, _dur = compute_max_drawdown(equity)
         assert dd == pytest.approx(0.20)  # 20% drawdown
 
     def test_empty_equity(self):

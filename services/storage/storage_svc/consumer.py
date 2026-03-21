@@ -7,13 +7,11 @@ into model objects, and feeds them into the BatchWriter for bulk insert.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from uuid import UUID
+from datetime import UTC, datetime
 
-from quant_core.kafka_utils import QConsumer, TOPIC_RAW_TRADES, TOPIC_RAW_DEPTH
-from quant_core.models import Trade, DepthUpdate
-
-from storage_svc.batch_writer import BatchWriter, PendingTrade, PendingBookSnapshot
+from quant_core.kafka_utils import TOPIC_RAW_DEPTH, TOPIC_RAW_TRADES, QConsumer
+from quant_core.models import DepthUpdate, Trade
+from storage_svc.batch_writer import BatchWriter, PendingBookSnapshot, PendingTrade
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +36,7 @@ class StorageConsumer:
         if not messages:
             return 0
 
-        for topic, key, value, headers in messages:
+        for topic, _key, value, headers in messages:
             try:
                 backtest_id = headers.get("backtest_id")
 
@@ -59,9 +57,7 @@ class StorageConsumer:
         trade = Trade.from_json(raw)
 
         # Convert exchange timestamp (ms) to datetime
-        ts = datetime.fromtimestamp(
-            trade.timestamp_exchange / 1000.0, tz=timezone.utc
-        )
+        ts = datetime.fromtimestamp(trade.timestamp_exchange / 1000.0, tz=UTC)
         latency_us = None
         if trade.timestamp_ingested and trade.timestamp_exchange:
             latency_us = (trade.timestamp_ingested - trade.timestamp_exchange) * 1000
@@ -109,9 +105,7 @@ class StorageConsumer:
         spread = best_ask - best_bid
         mid_price = (best_ask + best_bid) / 2.0
 
-        ts = datetime.fromtimestamp(
-            depth.timestamp_exchange / 1000.0, tz=timezone.utc
-        )
+        ts = datetime.fromtimestamp(depth.timestamp_exchange / 1000.0, tz=UTC)
 
         self._writer.add_book_snapshot(
             PendingBookSnapshot(

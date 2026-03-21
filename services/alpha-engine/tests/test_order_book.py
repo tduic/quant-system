@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from quant_core.models import DepthUpdate
 from alpha_engine_svc.order_book import OrderBook
+from quant_core.models import DepthUpdate
 
 
 @pytest.fixture
@@ -16,35 +16,43 @@ def book() -> OrderBook:
 @pytest.fixture
 def populated_book(book: OrderBook) -> OrderBook:
     """Book with 3 bid levels and 3 ask levels."""
-    book.apply_delta(DepthUpdate(
-        symbol="BTCUSD",
-        bids=[[100.0, 1.0], [99.0, 2.0], [98.0, 3.0]],
-        asks=[[101.0, 1.5], [102.0, 2.5], [103.0, 0.5]],
-    ))
+    book.apply_delta(
+        DepthUpdate(
+            symbol="BTCUSD",
+            bids=[[100.0, 1.0], [99.0, 2.0], [98.0, 3.0]],
+            asks=[[101.0, 1.5], [102.0, 2.5], [103.0, 0.5]],
+        )
+    )
     return book
 
 
 class TestApplyDelta:
     def test_adds_new_levels(self, book: OrderBook):
-        book.apply_delta(DepthUpdate(
-            bids=[[100.0, 1.0]],
-            asks=[[101.0, 2.0]],
-        ))
+        book.apply_delta(
+            DepthUpdate(
+                bids=[[100.0, 1.0]],
+                asks=[[101.0, 2.0]],
+            )
+        )
         assert book.best_bid() == (100.0, 1.0)
         assert book.best_ask() == (101.0, 2.0)
 
     def test_updates_existing_levels(self, populated_book: OrderBook):
-        populated_book.apply_delta(DepthUpdate(
-            bids=[[100.0, 5.0]],
-            asks=[],
-        ))
+        populated_book.apply_delta(
+            DepthUpdate(
+                bids=[[100.0, 5.0]],
+                asks=[],
+            )
+        )
         assert populated_book.best_bid() == (100.0, 5.0)
 
     def test_removes_levels_with_zero_quantity(self, populated_book: OrderBook):
-        populated_book.apply_delta(DepthUpdate(
-            bids=[[100.0, 0.0]],
-            asks=[],
-        ))
+        populated_book.apply_delta(
+            DepthUpdate(
+                bids=[[100.0, 0.0]],
+                asks=[],
+            )
+        )
         # Best bid should now be 99.0
         assert populated_book.best_bid() == (99.0, 2.0)
 
@@ -87,26 +95,32 @@ class TestSpread:
 
 class TestImbalance:
     def test_balanced_book(self, book: OrderBook):
-        book.apply_delta(DepthUpdate(
-            bids=[[100.0, 1.0]],
-            asks=[[101.0, 1.0]],
-        ))
+        book.apply_delta(
+            DepthUpdate(
+                bids=[[100.0, 1.0]],
+                asks=[[101.0, 1.0]],
+            )
+        )
         assert book.imbalance(levels=1) == pytest.approx(0.0)
 
     def test_bid_heavy_book(self, book: OrderBook):
-        book.apply_delta(DepthUpdate(
-            bids=[[100.0, 10.0]],
-            asks=[[101.0, 1.0]],
-        ))
+        book.apply_delta(
+            DepthUpdate(
+                bids=[[100.0, 10.0]],
+                asks=[[101.0, 1.0]],
+            )
+        )
         imb = book.imbalance(levels=1)
         assert imb > 0.0
         assert imb == pytest.approx((10.0 - 1.0) / 11.0)
 
     def test_ask_heavy_book(self, book: OrderBook):
-        book.apply_delta(DepthUpdate(
-            bids=[[100.0, 1.0]],
-            asks=[[101.0, 10.0]],
-        ))
+        book.apply_delta(
+            DepthUpdate(
+                bids=[[100.0, 1.0]],
+                asks=[[101.0, 10.0]],
+            )
+        )
         assert book.imbalance(levels=1) < 0.0
 
     def test_empty_book_imbalance(self, book: OrderBook):

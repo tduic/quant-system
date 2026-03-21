@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from quant_core.models import Trade, DepthUpdate, Signal
-from alpha_engine_svc.strategies.mean_reversion import MeanReversionStrategy, DEFAULT_PARAMS
+from alpha_engine_svc.strategies.mean_reversion import DEFAULT_PARAMS, MeanReversionStrategy
+from quant_core.models import DepthUpdate, Trade
 
 
 @pytest.fixture

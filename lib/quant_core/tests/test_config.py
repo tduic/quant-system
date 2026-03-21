@@ -8,10 +8,10 @@ from unittest.mock import patch
 import pytest
 
 from quant_core.config import (
+    AppConfig,
+    DatabaseConfig,
     KafkaConfig,
     RedisConfig,
-    DatabaseConfig,
-    AppConfig,
     _parse_symbols,
 )
 

@@ -10,19 +10,16 @@ import asyncio
 import logging
 import os
 import signal
-import sys
 
 import asyncpg
 
 from quant_core.config import AppConfig
 from quant_core.kafka_utils import (
-    QConsumer,
-    TOPIC_RAW_TRADES,
     TOPIC_RAW_DEPTH,
-    TOPIC_FILLS,
+    TOPIC_RAW_TRADES,
+    QConsumer,
 )
 from quant_core.logging import setup_logging
-
 from storage_svc.batch_writer import BatchWriter
 from storage_svc.consumer import StorageConsumer
 

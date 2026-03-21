@@ -9,16 +9,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
-import sys
-
-from quant_core.config import AppConfig
-from quant_core.kafka_utils import QProducer, TOPIC_HEARTBEAT
-from quant_core.logging import setup_logging
-from quant_core.models import now_ms
 
 from market_data_svc.exchange_ws import ExchangeWebSocket
 from market_data_svc.normalizer import normalize_message
 from market_data_svc.publisher import MarketDataPublisher
+from quant_core.config import AppConfig
+from quant_core.kafka_utils import TOPIC_HEARTBEAT, QProducer
+from quant_core.logging import setup_logging
+from quant_core.models import now_ms
 
 logger = logging.getLogger(__name__)
 

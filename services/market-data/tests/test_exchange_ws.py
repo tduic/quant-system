@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from market_data_svc.exchange_ws import (
-    ExchangeWebSocket,
     COINBASE_WS_URL,
+    ExchangeWebSocket,
     to_coinbase_product_id,
-    SYMBOL_MAP,
 )
 
 
@@ -85,21 +83,25 @@ class TestExchangeWebSocketConsume:
         ws = ExchangeWebSocket(symbols=["btcusd"], on_message=capture)
 
         raw_messages = [
-            json.dumps({
-                "type": "match",
-                "trade_id": 123,
-                "product_id": "BTC-USD",
-                "price": "42000.50",
-                "size": "0.001",
-                "side": "buy",
-                "time": "2026-03-21T12:00:00.000000Z",
-            }),
-            json.dumps({
-                "type": "l2update",
-                "product_id": "BTC-USD",
-                "time": "2026-03-21T12:00:00.100000Z",
-                "changes": [["buy", "42000.00", "0.5"]],
-            }),
+            json.dumps(
+                {
+                    "type": "match",
+                    "trade_id": 123,
+                    "product_id": "BTC-USD",
+                    "price": "42000.50",
+                    "size": "0.001",
+                    "side": "buy",
+                    "time": "2026-03-21T12:00:00.000000Z",
+                }
+            ),
+            json.dumps(
+                {
+                    "type": "l2update",
+                    "product_id": "BTC-USD",
+                    "time": "2026-03-21T12:00:00.100000Z",
+                    "changes": [["buy", "42000.00", "0.5"]],
+                }
+            ),
         ]
 
         mock_ws = AsyncIterator(raw_messages)
@@ -120,15 +122,17 @@ class TestExchangeWebSocketConsume:
 
         raw_messages = [
             json.dumps({"type": "subscriptions", "channels": []}),
-            json.dumps({
-                "type": "match",
-                "trade_id": 456,
-                "product_id": "BTC-USD",
-                "price": "42000",
-                "size": "0.01",
-                "side": "sell",
-                "time": "2026-03-21T12:00:01.000000Z",
-            }),
+            json.dumps(
+                {
+                    "type": "match",
+                    "trade_id": 456,
+                    "product_id": "BTC-USD",
+                    "price": "42000",
+                    "size": "0.01",
+                    "side": "sell",
+                    "time": "2026-03-21T12:00:01.000000Z",
+                }
+            ),
         ]
 
         mock_ws = AsyncIterator(raw_messages)
@@ -147,15 +151,17 @@ class TestExchangeWebSocketConsume:
 
         raw_messages = [
             "not valid json{{{",
-            json.dumps({
-                "type": "match",
-                "trade_id": 789,
-                "product_id": "BTC-USD",
-                "price": "42000",
-                "size": "0.01",
-                "side": "buy",
-                "time": "2026-03-21T12:00:02.000000Z",
-            }),
+            json.dumps(
+                {
+                    "type": "match",
+                    "trade_id": 789,
+                    "product_id": "BTC-USD",
+                    "price": "42000",
+                    "size": "0.01",
+                    "side": "buy",
+                    "time": "2026-03-21T12:00:02.000000Z",
+                }
+            ),
         ]
 
         mock_ws = AsyncIterator(raw_messages)
@@ -167,6 +173,7 @@ class TestExchangeWebSocketConsume:
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------
+
 
 class AsyncIterator:
     """Mock async iterator to simulate websocket message stream."""

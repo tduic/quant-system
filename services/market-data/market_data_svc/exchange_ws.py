@@ -10,16 +10,17 @@ import asyncio
 import json
 import logging
 import os
-from typing import Callable, Awaitable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 import websockets
 from websockets.exceptions import ConnectionClosed, ConnectionClosedError
 
 logger = logging.getLogger(__name__)
 
-COINBASE_WS_URL = os.getenv(
-    "EXCHANGE_WS_URL", "wss://ws-feed.exchange.coinbase.com"
-)
+COINBASE_WS_URL = os.getenv("EXCHANGE_WS_URL", "wss://ws-feed.exchange.coinbase.com")
 
 # Reconnect backoff parameters
 INITIAL_BACKOFF_S = 1.0
@@ -75,14 +76,16 @@ class ExchangeWebSocket:
 
     def _build_subscribe_message(self) -> str:
         """Build the Coinbase subscribe message."""
-        return json.dumps({
-            "type": "subscribe",
-            "product_ids": self._product_ids,
-            "channels": [
-                "matches",       # individual trades
-                "level2_batch",  # order book L2 updates (batched)
-            ],
-        })
+        return json.dumps(
+            {
+                "type": "subscribe",
+                "product_ids": self._product_ids,
+                "channels": [
+                    "matches",  # individual trades
+                    "level2_batch",  # order book L2 updates (batched)
+                ],
+            }
+        )
 
     async def start(self) -> None:
         """Connect and start consuming. Reconnects automatically."""
@@ -113,7 +116,7 @@ class ExchangeWebSocket:
 
             except (ConnectionClosed, ConnectionClosedError) as e:
                 logger.warning("WebSocket connection closed: %s", e)
-            except (OSError, asyncio.TimeoutError) as e:
+            except (TimeoutError, OSError) as e:
                 logger.warning("WebSocket connection error: %s", e)
             except Exception:
                 logger.exception("Unexpected WebSocket error")

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ class Position:
     """Current position in a single symbol."""
 
     symbol: str = ""
-    quantity: float = 0.0            # signed: positive = long, negative = short
+    quantity: float = 0.0  # signed: positive = long, negative = short
     avg_entry_price: float = 0.0
     realized_pnl: float = 0.0
     total_fees: float = 0.0
@@ -85,7 +84,4 @@ class PortfolioPnL:
         return sum(p.total_fees for p in self.positions.values())
 
     def total_unrealized_pnl(self, prices: dict[str, float]) -> float:
-        return sum(
-            p.unrealized_pnl(prices.get(p.symbol, p.avg_entry_price))
-            for p in self.positions.values()
-        )
+        return sum(p.unrealized_pnl(prices.get(p.symbol, p.avg_entry_price)) for p in self.positions.values())

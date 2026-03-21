@@ -34,9 +34,11 @@ jobs:
           pip install -e lib/
           pip install -r requirements-test.txt
 
-      - name: Run linter
-        run: python -m py_compile lib/quant_core/models.py
-        # Smoke-check that all modules parse cleanly
+      - name: Lint
+        run: ruff check lib/ services/ conftest.py
+
+      - name: Format check
+        run: ruff format --check lib/ services/ conftest.py
 
       - name: Run tests with coverage
         run: python -m pytest --cov --cov-report=term-missing

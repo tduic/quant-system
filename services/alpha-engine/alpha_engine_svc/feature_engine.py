@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -21,9 +20,9 @@ class Features:
     timestamp: int = 0
     symbol: str = ""
     vwap: float = 0.0
-    trade_imbalance: float = 0.0     # buy vs sell pressure
-    volatility: float = 0.0           # rolling std of returns
-    trade_rate: float = 0.0           # trades per second
+    trade_imbalance: float = 0.0  # buy vs sell pressure
+    volatility: float = 0.0  # rolling std of returns
+    trade_rate: float = 0.0  # trades per second
     mid_price: float | None = None
     spread: float | None = None
     book_imbalance: float = 0.0
@@ -43,10 +42,10 @@ class FeatureEngine:
         self._window_size = window_size
         self._prices: deque[float] = deque(maxlen=window_size)
         self._quantities: deque[float] = deque(maxlen=window_size)
-        self._sides: deque[bool] = deque(maxlen=window_size)   # True = buyer maker
+        self._sides: deque[bool] = deque(maxlen=window_size)  # True = buyer maker
         self._timestamps: deque[int] = deque(maxlen=window_size)
-        self._pv_sum: float = 0.0    # price * volume running sum
-        self._v_sum: float = 0.0     # volume running sum
+        self._pv_sum: float = 0.0  # price * volume running sum
+        self._v_sum: float = 0.0  # volume running sum
 
         # Latest book state
         self._mid_price: float | None = None
@@ -85,8 +84,8 @@ class FeatureEngine:
         vwap = self._pv_sum / self._v_sum if self._v_sum > 0 else 0.0
 
         # Trade imbalance: ratio of sell-initiated vs buy-initiated volume
-        buy_vol = sum(q for q, s in zip(self._quantities, self._sides) if s)
-        sell_vol = sum(q for q, s in zip(self._quantities, self._sides) if not s)
+        buy_vol = sum(q for q, s in zip(self._quantities, self._sides, strict=True) if s)
+        sell_vol = sum(q for q, s in zip(self._quantities, self._sides, strict=True) if not s)
         total_vol = buy_vol + sell_vol
         trade_imbalance = (buy_vol - sell_vol) / total_vol if total_vol > 0 else 0.0
 
@@ -101,7 +100,7 @@ class FeatureEngine:
             if returns:
                 mean_ret = sum(returns) / len(returns)
                 variance = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
-                volatility = variance ** 0.5
+                volatility = variance**0.5
 
         # Trade rate (trades per second over window)
         trade_rate = 0.0

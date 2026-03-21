@@ -6,14 +6,16 @@ and backtest_id header injection.
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Callable, Any
+from typing import TYPE_CHECKING, Any
 
-from confluent_kafka import Producer, Consumer, KafkaError, KafkaException, Message
+from confluent_kafka import Consumer, KafkaError, KafkaException, Message, Producer
 from confluent_kafka.admin import AdminClient, NewTopic
 
-from quant_core.config import KafkaConfig
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from quant_core.config import KafkaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -35,17 +37,20 @@ TOPIC_HEARTBEAT = "system.heartbeat"
 # Producer
 # ---------------------------------------------------------------------------
 
+
 class QProducer:
     """Thin wrapper around confluent-kafka Producer with JSON serialization."""
 
     def __init__(self, config: KafkaConfig, backtest_id: str | None = None):
-        self._producer = Producer({
-            "bootstrap.servers": config.bootstrap_servers,
-            "acks": config.producer_acks,
-            "linger.ms": config.producer_linger_ms,
-            "batch.size": config.producer_batch_size,
-            "compression.type": "lz4",
-        })
+        self._producer = Producer(
+            {
+                "bootstrap.servers": config.bootstrap_servers,
+                "acks": config.producer_acks,
+                "linger.ms": config.producer_linger_ms,
+                "batch.size": config.producer_batch_size,
+                "compression.type": "lz4",
+            }
+        )
         self._backtest_id = backtest_id
 
     def produce(
@@ -63,9 +68,7 @@ class QProducer:
         if headers:
             msg_headers.update(headers)
 
-        kafka_headers = (
-            [(k, v.encode()) for k, v in msg_headers.items()] if msg_headers else None
-        )
+        kafka_headers = [(k, v.encode()) for k, v in msg_headers.items()] if msg_headers else None
 
         self._producer.produce(
             topic=topic,
@@ -91,20 +94,27 @@ class QProducer:
 # Consumer
 # ---------------------------------------------------------------------------
 
+
 class QConsumer:
     """Thin wrapper around confluent-kafka Consumer with deserialization."""
 
     def __init__(self, config: KafkaConfig, group_id: str, topics: list[str]):
-        self._consumer = Consumer({
-            "bootstrap.servers": config.bootstrap_servers,
-            "group.id": group_id,
-            "auto.offset.reset": config.consumer_auto_offset_reset,
-            "enable.auto.commit": config.consumer_enable_auto_commit,
-            "max.poll.interval.ms": 300000,
-        })
+        self._consumer = Consumer(
+            {
+                "bootstrap.servers": config.bootstrap_servers,
+                "group.id": group_id,
+                "auto.offset.reset": config.consumer_auto_offset_reset,
+                "enable.auto.commit": True,
+                "max.poll.interval.ms": 300000,
+            }
+        )
         self._consumer.subscribe(topics)
         self._topics = topics
         logger.info("Consumer [%s] subscribed to %s", group_id, topics)
+
+    def poll(self, timeout: float = 1.0) -> Message | None:
+        """Poll for a single raw message. Returns confluent_kafka.Message or None."""
+        return self._consumer.poll(timeout)
 
     def poll_messages(
         self,
@@ -157,6 +167,7 @@ class QConsumer:
 # ---------------------------------------------------------------------------
 # Admin helpers
 # ---------------------------------------------------------------------------
+
 
 def ensure_topics(
     bootstrap_servers: str,

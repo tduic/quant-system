@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from quant_core.kafka_utils import TOPIC_RAW_TRADES, TOPIC_RAW_DEPTH
-from quant_core.models import Trade, DepthUpdate
-from storage_svc.consumer import StorageConsumer, BOOK_SNAPSHOT_INTERVAL, BOOK_SNAPSHOT_DEPTH
+from quant_core.kafka_utils import TOPIC_RAW_DEPTH, TOPIC_RAW_TRADES
+from quant_core.models import DepthUpdate, Trade
 from storage_svc.batch_writer import BatchWriter
-
+from storage_svc.consumer import BOOK_SNAPSHOT_DEPTH, BOOK_SNAPSHOT_INTERVAL, StorageConsumer
 
 # -----------------------------------------------------------------------
 # Fixtures
 # -----------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_writer() -> MagicMock:
@@ -30,9 +29,7 @@ def mock_kafka_consumer() -> MagicMock:
 
 
 @pytest.fixture
-def consumer(
-    mock_kafka_consumer: MagicMock, mock_writer: MagicMock
-) -> StorageConsumer:
+def consumer(mock_kafka_consumer: MagicMock, mock_writer: MagicMock) -> StorageConsumer:
     return StorageConsumer(mock_kafka_consumer, mock_writer)
 
 
@@ -74,6 +71,7 @@ def make_depth_message(
 # -----------------------------------------------------------------------
 # Trade processing
 # -----------------------------------------------------------------------
+
 
 class TestTradeProcessing:
     def test_trade_message_adds_to_writer(
@@ -138,9 +136,7 @@ class TestTradeProcessing:
     ):
         topic, key, value, _ = make_trade_message()
         headers = {"backtest_id": "bt-abc"}
-        mock_kafka_consumer.poll_messages.return_value = [
-            (topic, key, value, headers)
-        ]
+        mock_kafka_consumer.poll_messages.return_value = [(topic, key, value, headers)]
         consumer.process_batch()
 
         pending = mock_writer.add_trade.call_args[0][0]
@@ -150,6 +146,7 @@ class TestTradeProcessing:
 # -----------------------------------------------------------------------
 # Depth processing
 # -----------------------------------------------------------------------
+
 
 class TestDepthProcessing:
     def test_depth_not_snapshotted_until_interval(
@@ -238,10 +235,7 @@ class TestDepthProcessing:
             timestamp_exchange=1672515782136,
             timestamp_ingested=1672515782140,
         )
-        messages = [
-            (TOPIC_RAW_DEPTH, "BTCUSDT", depth.to_json().encode(), {})
-            for _ in range(BOOK_SNAPSHOT_INTERVAL)
-        ]
+        messages = [(TOPIC_RAW_DEPTH, "BTCUSDT", depth.to_json().encode(), {}) for _ in range(BOOK_SNAPSHOT_INTERVAL)]
         mock_kafka_consumer.poll_messages.return_value = messages
         consumer.process_batch()
 
@@ -251,6 +245,7 @@ class TestDepthProcessing:
 # -----------------------------------------------------------------------
 # Batch processing mechanics
 # -----------------------------------------------------------------------
+
 
 class TestBatchProcessing:
     def test_returns_zero_when_no_messages(
@@ -296,9 +291,7 @@ class TestBatchProcessing:
         mock_kafka_consumer: MagicMock,
         mock_writer: MagicMock,
     ):
-        messages = [make_trade_message()] + [
-            make_depth_message() for _ in range(BOOK_SNAPSHOT_INTERVAL)
-        ]
+        messages = [make_trade_message()] + [make_depth_message() for _ in range(BOOK_SNAPSHOT_INTERVAL)]
         mock_kafka_consumer.poll_messages.return_value = messages
         consumer.process_batch()
 

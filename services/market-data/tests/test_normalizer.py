@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
 
-from quant_core.models import Trade, DepthUpdate
 from market_data_svc.normalizer import normalize_message
-
+from quant_core.models import DepthUpdate, Trade
 
 # -----------------------------------------------------------------------
 # Coinbase fixtures
 # -----------------------------------------------------------------------
+
 
 @pytest.fixture
 def coinbase_match() -> dict:
@@ -45,6 +43,7 @@ def coinbase_l2update() -> dict:
 # -----------------------------------------------------------------------
 # Binance fixtures (kept for backward compat)
 # -----------------------------------------------------------------------
+
 
 @pytest.fixture
 def binance_trade() -> dict:
@@ -79,6 +78,7 @@ def binance_depth() -> dict:
 # -----------------------------------------------------------------------
 # Coinbase trade tests
 # -----------------------------------------------------------------------
+
 
 class TestNormalizeCoinbaseTrade:
     def test_returns_trade_for_match(self, coinbase_match: dict):
@@ -129,6 +129,7 @@ class TestNormalizeCoinbaseTrade:
 # Coinbase depth tests
 # -----------------------------------------------------------------------
 
+
 class TestNormalizeCoinbaseDepth:
     def test_returns_depth_update_for_l2update(self, coinbase_l2update: dict):
         result = normalize_message(coinbase_l2update)
@@ -163,6 +164,7 @@ class TestNormalizeCoinbaseDepth:
 # Binance backward compat tests
 # -----------------------------------------------------------------------
 
+
 class TestNormalizeBinanceTrade:
     def test_returns_trade_for_trade_event(self, binance_trade: dict):
         result = normalize_message(binance_trade)
@@ -190,6 +192,7 @@ class TestNormalizeBinanceDepth:
 # -----------------------------------------------------------------------
 # Unknown / edge cases
 # -----------------------------------------------------------------------
+
 
 class TestNormalizeUnknown:
     def test_returns_none_for_unknown_event(self):

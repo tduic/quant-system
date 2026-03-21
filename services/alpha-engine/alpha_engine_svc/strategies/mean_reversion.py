@@ -18,18 +18,18 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from quant_core.models import Trade, DepthUpdate, Signal, now_ms
-from alpha_engine_svc.strategy import BaseStrategy
 from alpha_engine_svc.feature_engine import FeatureEngine
+from alpha_engine_svc.strategy import BaseStrategy
+from quant_core.models import DepthUpdate, Signal, Trade, now_ms
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PARAMS = {
-    "window_size": 100,       # number of trades in rolling window
-    "threshold_std": 2.0,     # z-score threshold to trigger signal
-    "warmup_trades": 50,      # minimum trades before generating signals
-    "base_quantity": 0.001,   # base order size in base asset
-    "cooldown_trades": 10,    # minimum trades between signals
+    "window_size": 100,  # number of trades in rolling window
+    "threshold_std": 2.0,  # z-score threshold to trigger signal
+    "warmup_trades": 50,  # minimum trades before generating signals
+    "base_quantity": 0.001,  # base order size in base asset
+    "cooldown_trades": 10,  # minimum trades between signals
 }
 
 

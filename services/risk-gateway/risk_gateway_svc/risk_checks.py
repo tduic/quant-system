@@ -17,9 +17,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
 
-from quant_core.models import Signal, RiskDecision, now_ms
+from quant_core.models import RiskDecision, Signal, now_ms
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ logger = logging.getLogger(__name__)
 class PortfolioState:
     """Current portfolio state from Redis."""
 
-    positions: dict[str, float]        # symbol -> signed quantity
+    positions: dict[str, float]  # symbol -> signed quantity
     unrealized_pnl: float = 0.0
     realized_pnl: float = 0.0
     peak_equity: float = 0.0
@@ -39,9 +38,9 @@ class PortfolioState:
 class RiskLimits:
     """Configurable risk parameters."""
 
-    max_position_size: float = 1.0         # max quantity per symbol
+    max_position_size: float = 1.0  # max quantity per symbol
     max_order_notional: float = 100_000.0  # max single order value in USD
-    max_drawdown_pct: float = 0.05         # 5% max drawdown
+    max_drawdown_pct: float = 0.05  # 5% max drawdown
     max_total_exposure: float = 500_000.0  # max total notional exposure
 
 

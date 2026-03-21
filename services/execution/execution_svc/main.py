@@ -7,23 +7,21 @@ Receives approved orders from the Risk Gateway, simulates fills
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import signal
 
+from execution_svc.fill_simulator import FillSimulator
 from quant_core.config import AppConfig
 from quant_core.kafka_utils import (
+    TOPIC_FILLS,
+    TOPIC_HEARTBEAT,
+    TOPIC_ORDERS,
+    TOPIC_RAW_DEPTH,
     QConsumer,
     QProducer,
-    TOPIC_ORDERS,
-    TOPIC_FILLS,
-    TOPIC_RAW_DEPTH,
-    TOPIC_HEARTBEAT,
 )
 from quant_core.logging import setup_logging
-from quant_core.models import Order, DepthUpdate, now_ms
-
-from execution_svc.fill_simulator import FillSimulator
+from quant_core.models import DepthUpdate, Order, now_ms
 
 logger = logging.getLogger(__name__)
 
@@ -140,14 +138,18 @@ async def main() -> None:
 
                 logger.info(
                     "Fill: %s %s %.6f @ %.2f (slippage=%.2f bps, fee=%.4f)",
-                    fill.side, fill.symbol, fill.quantity,
-                    fill.fill_price, fill.slippage_bps, fill.fee,
+                    fill.side,
+                    fill.symbol,
+                    fill.quantity,
+                    fill.fill_price,
+                    fill.slippage_bps,
+                    fill.fee,
                 )
 
             producer.poll(0.0)
 
     loop = asyncio.get_event_loop()
-    consume_task = loop.run_in_executor(None, consume_loop)
+    loop.run_in_executor(None, consume_loop)
 
     await shutdown_event.wait()
 

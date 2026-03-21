@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
+from execution_svc.fill_simulator import DEFAULT_FEE_RATE, FillSimulator
 from quant_core.models import Order
-from execution_svc.fill_simulator import FillSimulator, DEFAULT_FEE_RATE
 
 
 @pytest.fixture

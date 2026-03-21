@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 
-from quant_core.models import Trade, DepthUpdate, now_ms
+from quant_core.models import DepthUpdate, Trade, now_ms
 
 logger = logging.getLogger(__name__)
 

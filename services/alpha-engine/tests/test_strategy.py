@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from quant_core.models import Trade, DepthUpdate, Signal
 from alpha_engine_svc.strategy import BaseStrategy, StrategyRegistry
+from quant_core.models import DepthUpdate, Signal, Trade
 
 
 class DummyStrategy(BaseStrategy):

@@ -8,14 +8,15 @@ comes first.
 
 from __future__ import annotations
 
-import asyncio
-import io
 import logging
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-import asyncpg
+if TYPE_CHECKING:
+    from datetime import datetime
+
+    import asyncpg
 
 logger = logging.getLogger(__name__)
 
@@ -76,13 +77,9 @@ class BatchWriter:
     @property
     def should_flush(self) -> bool:
         """Check if we should flush based on buffer size or timeout."""
-        buffer_full = (
-            len(self._trade_buffer) >= self._batch_size
-            or len(self._book_buffer) >= self._batch_size
-        )
-        timed_out = (
-            time.monotonic() - self._last_flush >= self._batch_timeout_s
-            and bool(self._trade_buffer or self._book_buffer)
+        buffer_full = len(self._trade_buffer) >= self._batch_size or len(self._book_buffer) >= self._batch_size
+        timed_out = time.monotonic() - self._last_flush >= self._batch_timeout_s and bool(
+            self._trade_buffer or self._book_buffer
         )
         return buffer_full or timed_out
 
@@ -118,9 +115,7 @@ class BatchWriter:
                 },
             )
 
-    async def _write_trades(
-        self, conn: asyncpg.Connection, trades: list[PendingTrade]
-    ) -> None:
+    async def _write_trades(self, conn: asyncpg.Connection, trades: list[PendingTrade]) -> None:
         """Bulk insert trades using copy_records_to_table."""
         records = [
             (
@@ -154,9 +149,7 @@ class BatchWriter:
             logger.exception("Failed to write %d trades", len(trades))
             raise
 
-    async def _write_books(
-        self, conn: asyncpg.Connection, books: list[PendingBookSnapshot]
-    ) -> None:
+    async def _write_books(self, conn: asyncpg.Connection, books: list[PendingBookSnapshot]) -> None:
         """Bulk insert order book snapshots."""
         records = [
             (

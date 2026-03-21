@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from alpha_engine_svc.feature_engine import FeatureEngine, Features
+from alpha_engine_svc.feature_engine import FeatureEngine
 
 
 @pytest.fixture
