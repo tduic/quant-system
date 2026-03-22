@@ -86,7 +86,7 @@
 - [x] Frontend: IC bar charts (overall + per-strategy), horizon detail table, summary cards
 - [x] Alpha Decay sheet added to Excel export with per-strategy breakdown
 - [x] 16 new tests covering signal recording, horizon filling, IC computation, and edge cases
-- [ ] Backtest integration: alpha decay analysis per backtest run (deferred to Phase 10)
+- [x] Backtest integration: alpha decay analysis per backtest run (completed in Phase 10)
 
 ### Phase 9 — Multi-Symbol Support
 - [x] Market data service extended to subscribe to BTC-USD, ETH-USD, SOL-USD concurrently
@@ -100,17 +100,18 @@
 - [x] Symbol filter (`?symbol=`) on PnL, TCA, Alpha Decay, Fills endpoints
 - [x] Frontend symbol selector dropdown in header, propagated to all filterable tabs
 - [x] 15 new cross-asset tests, 10 pairs trading tests, 5 symbol-filtering dashboard tests, 5 total-exposure risk tests
-- [ ] Per-symbol backtest analysis (deferred to Phase 10)
-
-## Up Next
+- [x] Per-symbol backtest analysis (completed in Phase 10)
 
 ### Phase 10 — Backtest Improvements
-- [ ] Walk-forward optimization (rolling train/test windows)
-- [ ] Parameter sensitivity analysis (grid/random search over strategy params)
-- [ ] Monte Carlo simulation of trade sequences for confidence intervals on Sharpe/drawdown
-- [ ] Backtest comparison view: side-by-side metrics for multiple runs
-- [ ] Slippage/fee sensitivity sweeps
-- [ ] Out-of-sample validation reporting
+- [x] Walk-forward optimization: rolling/expanding train/test windows with overfitting detection
+- [x] Parameter sensitivity analysis: grid search and random search with per-parameter impact scoring
+- [x] Monte Carlo simulation: bootstrap/block-bootstrap resampling for Sharpe/drawdown confidence intervals
+- [x] Backtest comparison view: side-by-side metrics, pairwise deltas, ranking by Sharpe/return
+- [x] Slippage/fee sensitivity sweeps: breakeven analysis, dSharpe/dCost sensitivities
+- [x] Out-of-sample validation reporting: composite grade (STRONG/MODERATE/WEAK/FAIL), flagging system
+- [x] 37 new Monte Carlo tests, 10 sensitivity sweep tests, 14 walk-forward tests, 14 param sensitivity tests, 12 comparison tests, 20 validation tests
+
+## Up Next
 
 ### Phase 11 — More Strategies
 - [ ] Momentum/trend-following strategy (breakout or moving-average crossover)

@@ -127,6 +127,14 @@ make backtest-list
 make backtest-results ID=bt-abc123
 ```
 
+**Backtest Analysis Modules:**
+- **Walk-Forward Optimization** — Rolling or expanding train/test windows with parameter optimization per fold. Detects overfitting via train-vs-test Sharpe degradation.
+- **Parameter Sensitivity** — Grid search and random search over strategy parameters. Computes per-parameter impact scores and Pearson correlation with Sharpe.
+- **Monte Carlo Simulation** — Bootstrap and block-bootstrap resampling of return series. Produces confidence intervals on Sharpe, max drawdown, and total return.
+- **Backtest Comparison** — Side-by-side metrics for multiple runs with pairwise deltas, percent changes, and ranking by Sharpe or return.
+- **Slippage/Fee Sensitivity** — Sweeps fee rates, slippage (bps), and latency to find breakeven thresholds and compute dSharpe/dCost sensitivities.
+- **Out-of-Sample Validation** — Combines walk-forward, Monte Carlo, and cost sensitivity results into a composite grade (STRONG/MODERATE/WEAK/FAIL) with categorical flags.
+
 ## Quick Start
 
 ### Prerequisites
