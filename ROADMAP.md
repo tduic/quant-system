@@ -26,21 +26,20 @@
 - [x] Walk-the-book market impact model
 - [x] Ruff linting and formatting (integrated into CI)
 
-## Up Next
-
 ### Phase 4 — Post-Trade Dashboard (Weeks 7-8)
-Core logic is implemented and tested. Remaining work:
-- [ ] Wire up post-trade Kafka consumer (ingest fills + market data)
-- [ ] Real-time PnL computation (realized + unrealized, per symbol, per strategy)
-- [ ] FastAPI dashboard with 6 tabs:
-  - PnL attribution
-  - Transaction cost analysis (slippage decomposition)
-  - Alpha decay curves (IC at various horizons)
-  - Risk metrics (Sharpe, Sortino, Calmar)
-  - Drawdown analysis (max drawdown, duration, recovery)
-  - Fill rate and order lifecycle
-- [ ] Excel export endpoint (one workbook, separate sheets per tab)
-- [ ] Uncomment post-trade service in docker-compose
+- [x] Thread-safe in-memory state store (fills, equity curve, TCA, running metrics)
+- [x] Kafka consumer for fills + raw trades (live price updates for unrealized PnL)
+- [x] FastAPI dashboard with 6 tabs:
+  - [x] PnL attribution (per symbol, realized + unrealized)
+  - [x] Transaction cost analysis (spread, slippage, market impact, fee decomposition)
+  - [ ] Alpha decay curves (placeholder — requires Phase 5 backtesting for IC tracking)
+  - [x] Risk metrics (Sharpe, Sortino, Calmar, drawdown, win rate, profit factor)
+  - [x] Drawdown analysis (equity curve + running drawdown)
+  - [x] Fill rate and order lifecycle
+- [x] Excel export endpoint (formatted .xlsx with 5 sheets, styled headers)
+- [x] Post-trade service enabled in docker-compose (port 8080)
+
+## Up Next
 
 ### Phase 5 — Backtesting (Weeks 9-10)
 - [ ] Backtest Replay Service: reads historical ticks from TimescaleDB, injects into Kafka

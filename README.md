@@ -97,11 +97,17 @@ Consumes approved orders, simulates fills for paper trading, publishes fill even
 - Walk-the-book (volume-weighted average across depth levels)
 - Brownian bridge slippage (models price movement during order latency)
 
-### Post-Trade Service *(Phase 4 — scaffolded, not yet wired)*
-PnL tracking, performance metrics, transaction cost analysis. Core logic is implemented and tested:
-- PnL tracker with average cost basis (realized + unrealized)
-- Sharpe, Sortino, Calmar ratios and max drawdown
-- TCA: spread cost, slippage, market impact, fee decomposition
+### Post-Trade Service
+Consumes fills and trade data from Kafka, computes real-time analytics, and serves a FastAPI dashboard on port 8080.
+
+**Dashboard Endpoints:**
+- `GET /api/pnl` — PnL attribution (per symbol, realized + unrealized)
+- `GET /api/tca` — Transaction cost analysis (per-fill breakdown + averages)
+- `GET /api/alpha-decay` — Alpha decay curves (placeholder, requires backtesting)
+- `GET /api/risk-metrics` — Sharpe, Sortino, Calmar, drawdown, win rate, profit factor
+- `GET /api/drawdown` — Equity curve + running drawdown curve
+- `GET /api/fills` — Fill details + summary stats
+- `GET /api/export/excel` — Download formatted .xlsx report (5 sheets)
 
 ## Quick Start
 
