@@ -33,6 +33,9 @@ Thumbs.db
 .env
 .env.local
 
+# Backtest results
+.backtest_results/
+
 # Old src directories (migrated to unique package names)
 services/market-data/src/
 services/storage/src/

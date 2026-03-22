@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-watch lint lint-fix format
+.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-watch lint lint-fix format backtest backtest-list backtest-results
 
 # Default target
 help: ## Show this help
@@ -141,6 +141,9 @@ test-execution: ## Run execution service tests only
 test-post-trade: ## Run post-trade service tests only
 	python -m pytest services/post-trade/tests/ -v
 
+test-backtest: ## Run backtest service tests only
+	python -m pytest services/backtest/tests/ -v
+
 test-watch: ## Run tests in watch mode (requires pytest-watch)
 	ptw -- -v --tb=short
 
@@ -157,6 +160,21 @@ lint-fix: ## Auto-fix linting issues
 
 format: ## Format code with ruff
 	ruff format lib/ services/ conftest.py
+
+# ---------------------------------------------------------------------------
+# Backtesting
+# ---------------------------------------------------------------------------
+
+BACKTEST_PYTHONPATH = PYTHONPATH=lib:services/backtest
+
+backtest: ## Run a backtest (usage: make backtest ARGS="--symbol BTCUSD --start 2026-03-21T00:00:00 --end 2026-03-21T12:00:00")
+	$(BACKTEST_PYTHONPATH) python -m backtest_svc.cli run $(ARGS)
+
+backtest-list: ## List all backtest runs
+	$(BACKTEST_PYTHONPATH) python -m backtest_svc.cli list
+
+backtest-results: ## Show results for a backtest (usage: make backtest-results ID=bt-abc123)
+	$(BACKTEST_PYTHONPATH) python -m backtest_svc.cli results --backtest-id $(ID)
 
 # ---------------------------------------------------------------------------
 # Cleanup

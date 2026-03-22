@@ -109,6 +109,15 @@ Consumes fills and trade data from Kafka, computes real-time analytics, and serv
 - `GET /api/fills` — Fill details + summary stats
 - `GET /api/export/excel` — Download formatted .xlsx report (5 sheets)
 
+### Backtest Service
+Replays historical tick data from TimescaleDB through the same Kafka pipeline with a `backtest_id` header. All downstream services process backtest data identically to live — no `if backtest:` branches. Three replay modes: as_fast_as_possible, real_time, and scaled (Nx speed).
+
+```bash
+make backtest ARGS="--symbol BTCUSD --start 2026-03-21T00:00:00 --end 2026-03-21T12:00:00"
+make backtest-list
+make backtest-results ID=bt-abc123
+```
+
 ## Quick Start
 
 ### Prerequisites
@@ -199,7 +208,18 @@ make clean                 # stop and delete all data
 | `make test-risk`     | Run risk gateway tests only                        |
 | `make test-execution`| Run execution service tests only                   |
 | `make test-post-trade` | Run post-trade tests only                        |
+| `make test-backtest` | Run backtest service tests only                    |
 | `make test-watch`    | Auto-rerun tests on file changes                   |
+
+### Backtesting
+
+| Command              | Description                                       |
+|----------------------|---------------------------------------------------|
+| `make backtest ARGS="..."` | Run a backtest (see args below)              |
+| `make backtest-list` | List all stored backtest runs                      |
+| `make backtest-results ID=bt-...` | Show results for a specific run        |
+
+Backtest args: `--symbol BTCUSD --start 2026-03-21T00:00:00 --end 2026-03-21T12:00:00 [--speed as_fast_as_possible|real_time|scaled] [--multiplier 10] [--no-depth]`
 
 ### Linting & Formatting
 
@@ -238,8 +258,10 @@ quant-system/
 │   │   └── risk_gateway_svc/
 │   ├── execution/               # Fill simulator (spread, walk-book, Brownian bridge)
 │   │   └── execution_svc/
-│   └── post-trade/              # PnL, metrics, TCA (Phase 4)
-│       └── post_trade_svc/
+│   ├── post-trade/              # PnL, metrics, TCA, FastAPI dashboard
+│   │   └── post_trade_svc/
+│   └── backtest/                # Replay engine + CLI
+│       └── backtest_svc/
 ├── scripts/
 │   ├── init_db.sql              # TimescaleDB schema, hypertables, aggregates
 │   └── create_topics.sh         # Kafka topic creation

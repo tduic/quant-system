@@ -12,6 +12,7 @@ testpaths = [
     "services/risk-gateway/tests",
     "services/execution/tests",
     "services/post-trade/tests",
+    "services/backtest/tests",
 ]
 asyncio_mode = "auto"
 addopts = "-v --tb=short -q"
@@ -28,6 +29,7 @@ source = [
     "services/risk-gateway/risk_gateway_svc",
     "services/execution/execution_svc",
     "services/post-trade/post_trade_svc",
+    "services/backtest/backtest_svc",
 ]
 omit = [
     "*/tests/*",
@@ -63,4 +65,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["quant_core", "market_data_svc", "storage_svc", "alpha_engine_svc", "risk_gateway_svc", "execution_svc", "post_trade_svc"]
+known-first-party = ["quant_core", "market_data_svc", "storage_svc", "alpha_engine_svc", "risk_gateway_svc", "execution_svc", "post_trade_svc", "backtest_svc"]

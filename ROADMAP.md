@@ -42,12 +42,14 @@
 ## Up Next
 
 ### Phase 5 — Backtesting (Weeks 9-10)
-- [ ] Backtest Replay Service: reads historical ticks from TimescaleDB, injects into Kafka
-- [ ] `backtest_id` header on every message — all downstream services namespace state by ID
-- [ ] Same code runs in both live and backtest modes (no `if backtest:` branches)
-- [ ] Redis state isolation per backtest run
-- [ ] Database writes tagged with backtest_id for separate analysis
-- [ ] CLI to launch/monitor/compare backtest runs
+- [x] Replay engine: reads historical ticks from TimescaleDB, publishes to Kafka with backtest_id
+- [x] `backtest_id` header auto-injected on every message via QProducer
+- [x] Same code runs in both live and backtest modes (no `if backtest:` branches)
+- [x] Three replay speed modes: as_fast_as_possible, real_time, scaled (Nx)
+- [x] CLI: `backtest run`, `backtest list`, `backtest results`
+- [x] File-based result storage with JSON metadata
+- [x] Redis state isolation per backtest run (key schema namespaced by run_id)
+- [x] Database writes tagged with backtest_id for separate analysis
 
 ### Phase 6 — C++ Performance (Weeks 11-14)
 - [ ] pybind11 build infrastructure (CMake, shared library compilation)
