@@ -104,7 +104,7 @@ Consumes fills and trade data from Kafka, computes real-time analytics, and serv
 **Dashboard Endpoints:**
 - `GET /api/pnl` — PnL attribution (per symbol, realized + unrealized)
 - `GET /api/tca` — Transaction cost analysis (per-fill breakdown + averages)
-- `GET /api/alpha-decay` — Alpha decay curves (placeholder, requires backtesting)
+- `GET /api/alpha-decay` — IC decay curves at 5 horizons (1m, 5m, 15m, 30m, 1h), per-strategy breakdown
 - `GET /api/risk-metrics` — Sharpe, Sortino, Calmar, drawdown, win rate, profit factor
 - `GET /api/drawdown` — Equity curve + running drawdown curve
 - `GET /api/fills` — Fill details + summary stats

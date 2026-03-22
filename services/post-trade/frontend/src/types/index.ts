@@ -102,4 +102,24 @@ export interface FillAnalysis {
   summary: FillSummary;
 }
 
+// Alpha Decay / IC Analysis
+export interface HorizonIC {
+  horizon_ms: number;
+  horizon_label: string;
+  ic: number | null;
+  filled_count: number;
+  total_signals: number;
+}
+
+export interface StrategyAlphaDecay {
+  signal_count: number;
+  horizons: Omit<HorizonIC, 'total_signals'>[];
+}
+
+export interface AlphaDecayData {
+  horizons: HorizonIC[];
+  total_signals: number;
+  strategies: Record<string, StrategyAlphaDecay>;
+}
+
 export type TabId = 'pnl' | 'tca' | 'alpha-decay' | 'risk-metrics' | 'drawdown' | 'fills';

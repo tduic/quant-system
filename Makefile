@@ -115,8 +115,10 @@ redis-keys: ## List all Redis keys
 # Testing
 # ---------------------------------------------------------------------------
 
+TEST_DIRS = lib/quant_core/tests services/market-data/tests services/storage/tests services/alpha-engine/tests services/risk-gateway/tests services/execution/tests services/post-trade/tests services/backtest/tests cpp/tests
+
 test: ## Run all unit tests
-	python -m pytest
+	python -m pytest $(TEST_DIRS)
 
 test-cov: ## Run tests with coverage report
 	python -m pytest --cov --cov-report=term-missing --cov-report=html:htmlcov

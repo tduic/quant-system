@@ -51,13 +51,10 @@ def create_app(state: PostTradeState) -> FastAPI:
     def tca_summary():
         return state.get_tca_summary()
 
-    # Tab 3: Alpha Decay (placeholder — needs signal-level IC tracking)
+    # Tab 3: Alpha Decay — IC at multiple time horizons
     @app.get("/api/alpha-decay")
     def alpha_decay():
-        return {
-            "status": "placeholder",
-            "description": "Alpha decay curves require signal-level IC (information coefficient) tracking in the alpha engine. This will measure how signal predictiveness decays over time after emission.",
-        }
+        return state.get_alpha_decay()
 
     # Tab 4: Risk Metrics
     @app.get("/api/risk-metrics")
@@ -174,7 +171,33 @@ def _build_excel(data: dict) -> bytes:
         ws_tca.cell(row=row, column=7, value=avgs["fee_bps"])
         ws_tca.cell(row=row, column=8, value=avgs["total_cost_bps"])
 
-    # --- Sheet 3: Risk Metrics ---
+    # --- Sheet 3: Alpha Decay ---
+    ws_alpha = wb.create_sheet("Alpha Decay")
+    alpha = data["alpha_decay"]
+    write_header(ws_alpha, ["Horizon", "IC", "Filled Signals", "Total Signals"])
+    for i, h in enumerate(alpha.get("horizons", []), 2):
+        ws_alpha.cell(row=i, column=1, value=h["horizon_label"])
+        ws_alpha.cell(row=i, column=2, value=h["ic"])
+        ws_alpha.cell(row=i, column=3, value=h["filled_count"])
+        ws_alpha.cell(row=i, column=4, value=h["total_signals"])
+    # Per-strategy breakdown
+    row = len(alpha.get("horizons", [])) + 4
+    for strat_id, strat_data in alpha.get("strategies", {}).items():
+        ws_alpha.cell(row=row, column=1, value=strat_id).font = header_font
+        ws_alpha.cell(row=row, column=2, value=f"({strat_data['signal_count']} signals)")
+        row += 1
+        write_header(ws_alpha, ["Horizon", "IC", "Filled Signals"], row)
+        row += 1
+        for h in strat_data["horizons"]:
+            ws_alpha.cell(row=row, column=1, value=h["horizon_label"])
+            ws_alpha.cell(row=row, column=2, value=h["ic"])
+            ws_alpha.cell(row=row, column=3, value=h["filled_count"])
+            row += 1
+        row += 1
+    ws_alpha.column_dimensions["A"].width = 18
+    ws_alpha.column_dimensions["B"].width = 14
+
+    # --- Sheet 4: Risk Metrics ---
     ws_risk = wb.create_sheet("Risk Metrics")
     metrics = data["risk_metrics"]
     write_header(ws_risk, ["Metric", "Value"])

@@ -16,8 +16,8 @@ testpaths = [
     "cpp/tests",
 ]
 asyncio_mode = "auto"
-norecursedirs = ["node_modules", "dist", "cpp/build", "venv", ".git"]
-addopts = "-v --tb=short -q"
+norecursedirs = ["node_modules", "dist", "cpp/build", "venv", ".git", "frontend"]
+addopts = "--tb=short"
 markers = [
     "integration: marks tests requiring live infrastructure (Kafka, DB, Redis)",
 ]

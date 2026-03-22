@@ -80,10 +80,14 @@ class TestTCAEndpoint:
 
 
 class TestAlphaDecayEndpoint:
-    def test_returns_placeholder(self, client: TestClient):
+    def test_returns_empty_decay_data(self, client: TestClient):
         resp = client.get("/api/alpha-decay")
         assert resp.status_code == 200
-        assert resp.json()["status"] == "placeholder"
+        data = resp.json()
+        assert "horizons" in data
+        assert "total_signals" in data
+        assert "strategies" in data
+        assert data["total_signals"] == 0
 
 
 class TestRiskMetricsEndpoint:

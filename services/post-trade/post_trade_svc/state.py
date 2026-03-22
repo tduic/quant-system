@@ -11,6 +11,7 @@ import logging
 import threading
 from dataclasses import dataclass
 
+from post_trade_svc.alpha_decay import AlphaDecayTracker
 from post_trade_svc.metrics import (
     compute_calmar,
     compute_max_drawdown,
@@ -78,6 +79,9 @@ class PostTradeState:
         # Peak equity for drawdown
         self._peak_equity = initial_equity
 
+        # Alpha decay tracker
+        self._alpha_decay = AlphaDecayTracker()
+
     def process_fill(self, fill: FillRecord) -> None:
         """Process a new fill: update PnL, TCA, equity curve."""
         with self._lock:
@@ -134,10 +138,34 @@ class PostTradeState:
                 if prev > 0:
                     self._daily_returns.append((equity - prev) / prev)
 
-    def update_price(self, symbol: str, price: float) -> None:
-        """Update latest price for unrealized PnL computation."""
+    def record_signal(
+        self,
+        signal_id: str,
+        timestamp_ms: int,
+        strategy_id: str,
+        symbol: str,
+        side: str,
+        strength: float,
+        mid_price: float,
+    ) -> None:
+        """Record a signal emission for alpha decay tracking."""
+        with self._lock:
+            self._alpha_decay.record_signal(
+                signal_id=signal_id,
+                timestamp_ms=timestamp_ms,
+                strategy_id=strategy_id,
+                symbol=symbol,
+                side=side,
+                strength=strength,
+                mid_price=mid_price,
+            )
+
+    def update_price(self, symbol: str, price: float, timestamp_ms: int = 0) -> None:
+        """Update latest price for unrealized PnL and alpha decay horizons."""
         with self._lock:
             self._latest_prices[symbol] = price
+            if timestamp_ms > 0:
+                self._alpha_decay.on_trade(symbol=symbol, timestamp_ms=timestamp_ms, price=price)
 
     def _compute_equity(self) -> float:
         """Current total equity."""
@@ -285,6 +313,11 @@ class PostTradeState:
                 "peak_equity": round(self._peak_equity, 2),
             }
 
+    def get_alpha_decay(self) -> dict:
+        """Tab 3: Alpha decay / IC analysis."""
+        with self._lock:
+            return self._alpha_decay.get_alpha_decay_data()
+
     def get_fill_analysis(self) -> dict:
         """Tab 6: Fill rate and order lifecycle."""
         with self._lock:
@@ -327,6 +360,7 @@ class PostTradeState:
         return {
             "pnl": self.get_pnl_summary(),
             "tca": self.get_tca_summary(),
+            "alpha_decay": self.get_alpha_decay(),
             "risk_metrics": self.get_risk_metrics(),
             "drawdown": self.get_drawdown_data(),
             "fills": self.get_fill_analysis(),

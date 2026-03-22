@@ -1,4 +1,4 @@
-import type { PnLSummary, TCASummary, RiskMetrics, DrawdownData, FillAnalysis } from './types';
+import type { PnLSummary, TCASummary, RiskMetrics, DrawdownData, FillAnalysis, AlphaDecayData } from './types';
 
 const BASE = '/api';
 
@@ -14,7 +14,7 @@ export const api = {
   getRiskMetrics: () => fetchJson<RiskMetrics>('/risk-metrics'),
   getDrawdown: () => fetchJson<DrawdownData>('/drawdown'),
   getFills: () => fetchJson<FillAnalysis>('/fills'),
-  getAlphaDecay: () => fetchJson<{ status: string; description: string }>('/alpha-decay'),
+  getAlphaDecay: () => fetchJson<AlphaDecayData>('/alpha-decay'),
   exportExcel: () => {
     window.open(`${BASE}/export/excel`, '_blank');
   },

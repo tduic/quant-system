@@ -76,14 +76,19 @@
 - [x] Makefile commands (fe-install, fe-dev, fe-build, fe-lint)
 - [x] CI job: npm ci, tsc --noEmit, npm run build
 
-## Up Next
-
 ### Phase 8 — Alpha Decay Implementation
-- [ ] Add signal-level IC (information coefficient) tracking to the alpha engine
-- [ ] Log predicted vs actual return at multiple horizons (1m, 5m, 15m, 1h) per signal
-- [ ] Compute rolling IC and IC decay curves in the post-trade service
-- [ ] Wire alpha decay data into the existing dashboard tab (replace placeholder)
-- [ ] Backtest integration: alpha decay analysis per backtest run
+- [x] AlphaDecayTracker: records signal predictions and evaluates returns at 5 time horizons (1m, 5m, 15m, 30m, 1h)
+- [x] Pearson IC (information coefficient) computed per-horizon with min 5 signals threshold
+- [x] Per-strategy IC breakdown for comparing signal quality across strategies
+- [x] Post-trade service subscribes to `signals` Kafka topic for real-time tracking
+- [x] Trade ticks evaluate pending horizon returns as they arrive
+- [x] `/api/alpha-decay` endpoint serves IC decay curves (replaces placeholder)
+- [x] Frontend: IC bar charts (overall + per-strategy), horizon detail table, summary cards
+- [x] Alpha Decay sheet added to Excel export with per-strategy breakdown
+- [x] 16 new tests covering signal recording, horizon filling, IC computation, and edge cases
+- [ ] Backtest integration: alpha decay analysis per backtest run (deferred to Phase 10)
+
+## Up Next
 
 ### Phase 9 — Multi-Symbol Support
 - [ ] Extend market data service to subscribe to multiple symbols concurrently (ETH-USD, SOL-USD, etc.)

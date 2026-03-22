@@ -155,6 +155,7 @@ class TestExcelExport:
         data = state.get_all_data_for_export()
         assert "pnl" in data
         assert "tca" in data
+        assert "alpha_decay" in data
         assert "risk_metrics" in data
         assert "drawdown" in data
         assert "fills" in data

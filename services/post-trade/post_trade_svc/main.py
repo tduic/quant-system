@@ -20,11 +20,12 @@ from quant_core.kafka_utils import (
     TOPIC_FILLS,
     TOPIC_HEARTBEAT,
     TOPIC_RAW_TRADES,
+    TOPIC_SIGNALS,
     QConsumer,
     QProducer,
 )
 from quant_core.logging import setup_logging
-from quant_core.models import Fill, Trade, now_ms
+from quant_core.models import Fill, Signal, Trade, now_ms
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ async def main() -> None:
     consumer = QConsumer(
         config.kafka,
         group_id="post-trade",
-        topics=[TOPIC_FILLS, TOPIC_RAW_TRADES],
+        topics=[TOPIC_FILLS, TOPIC_RAW_TRADES, TOPIC_SIGNALS],
     )
 
     # --- FastAPI dashboard ---
@@ -93,9 +94,10 @@ async def main() -> None:
     # --- Main consume loop ---
     fill_count = 0
     trade_count = 0
+    signal_count = 0
 
     def consume_loop() -> None:
-        nonlocal fill_count, trade_count
+        nonlocal fill_count, trade_count, signal_count
 
         while not shutdown_event.is_set():
             msg = consumer.poll(timeout=0.1)
@@ -132,10 +134,28 @@ async def main() -> None:
                 if fill_count % 10 == 0:
                     logger.info("Processed %d fills", fill_count)
 
+            elif topic == TOPIC_SIGNALS:
+                try:
+                    sig = Signal.from_json(value)
+                    state.record_signal(
+                        signal_id=sig.signal_id,
+                        timestamp_ms=sig.timestamp,
+                        strategy_id=sig.strategy_id,
+                        symbol=sig.symbol,
+                        side=sig.side,
+                        strength=sig.strength,
+                        mid_price=sig.mid_price_at_signal,
+                    )
+                    signal_count += 1
+                    if signal_count % 10 == 0:
+                        logger.info("Tracked %d signals for alpha decay", signal_count)
+                except Exception:
+                    logger.warning("Failed to parse signal")
+
             elif topic == TOPIC_RAW_TRADES:
                 try:
                     trade = Trade.from_json(value)
-                    state.update_price(trade.symbol, trade.price)
+                    state.update_price(trade.symbol, trade.price, timestamp_ms=trade.timestamp)
                     trade_count += 1
                 except Exception:
                     pass
@@ -150,7 +170,7 @@ async def main() -> None:
     heartbeat_task.cancel()
     consumer.close()
     producer.flush(timeout=5.0)
-    logger.info("Post-Trade stopped. Fills: %d, Trades: %d", fill_count, trade_count)
+    logger.info("Post-Trade stopped. Fills: %d, Trades: %d, Signals: %d", fill_count, trade_count, signal_count)
 
 
 if __name__ == "__main__":
