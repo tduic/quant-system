@@ -1,0 +1,248 @@
+# Quant Trading System
+
+A full-lifecycle quantitative trading system built as a microservice architecture. Covers the entire pipeline from data ingestion through post-trade analysis.
+
+**Data Ingestion → Storage → Alpha Research → Risk Management → Execution → Post-Trade Analysis**
+
+## Architecture
+
+Six microservices communicate via Kafka, with TimescaleDB for durable storage and Redis for shared state.
+
+```
+Coinbase WebSocket
+       │
+       ▼
+┌──────────────┐    Kafka     ┌──────────────┐    Kafka     ┌──────────────┐
+│  Market Data │──────────────│    Alpha     │──────────────│     Risk     │
+│   Service    │  raw.trades  │    Engine    │   signals    │   Gateway    │
+│              │  raw.depth   │              │              │              │
+└──────────────┘              └──────────────┘              └──────────────┘
+       │                             │                            │
+       ▼                             │                            │ orders
+┌──────────────┐                     │                            ▼
+│   Storage    │                     │                     ┌──────────────┐
+│   Service    │                     │                     │  Execution   │
+│ (TimescaleDB)│                     │                     │   Service    │
+└──────────────┘                     │                     └──────────────┘
+                                     │                            │
+                                     ▼                            │ fills
+                              ┌──────────────┐                    │
+                              │  Post-Trade  │◄───────────────────┘
+                              │   Analysis   │
+                              │  (Dashboard) │
+                              └──────────────┘
+```
+
+### Infrastructure
+
+| Component    | Purpose                                   | Port  |
+|-------------|-------------------------------------------|-------|
+| Kafka       | Event bus between all services             | 9092  |
+| Zookeeper   | Kafka coordination                        | 2181  |
+| TimescaleDB | Time-series storage (trades, OHLCV, fills)| 5432  |
+| Redis       | Shared state (positions, live PnL)        | 6379  |
+
+### Kafka Topics
+
+| Topic             | Producer       | Consumer(s)              |
+|-------------------|----------------|--------------------------|
+| `raw.trades`      | Market Data    | Storage, Alpha Engine    |
+| `raw.depth`       | Market Data    | Storage, Alpha, Execution|
+| `signals`         | Alpha Engine   | Risk Gateway             |
+| `orders`          | Risk Gateway   | Execution                |
+| `fills`           | Execution      | Post-Trade               |
+| `risk.events`     | Risk Gateway   | Post-Trade               |
+| `system.heartbeat`| All services   | Monitoring               |
+
+## Tech Stack
+
+- **Language**: Python 3.14 (C++ via pybind11 planned for performance-critical paths)
+- **Messaging**: Apache Kafka (confluent-kafka)
+- **Database**: TimescaleDB (PostgreSQL + time-series extensions)
+- **Cache**: Redis
+- **Containers**: Docker Compose
+- **CI**: GitHub Actions
+- **Linting**: Ruff
+- **Testing**: pytest + pytest-cov
+
+## Services
+
+### Market Data Service
+Connects to Coinbase WebSocket, normalizes BTC-USD trade and L2 order book data, publishes to Kafka. Handles reconnection with exponential backoff.
+
+### Storage Service
+Consumes from Kafka, batch-writes to TimescaleDB using the COPY protocol. TimescaleDB auto-generates 1-minute, 1-hour, and 1-day OHLCV candles via continuous aggregates. Compression kicks in after 7 days, retention drops raw data after 90 days.
+
+### Alpha Engine
+Consumes trades and depth updates, maintains per-symbol order books and a rolling feature engine (VWAP, volatility, trade imbalance, trade rate). Routes market data to pluggable strategies.
+
+**Strategies:**
+- **Mean Reversion** — Trades when price deviates from VWAP by a configurable z-score threshold. Includes warmup, cooldown, and duplicate suppression.
+- **Linear Regression** — Rolling OLS fair value model. Regresses price against 4 features, trades the residual when it exceeds the threshold. Hand-rolled Gaussian elimination solver (no numpy).
+
+### Risk Gateway
+Consumes signals, runs composable risk checks, publishes approved orders or rejections.
+
+**Risk Checks:**
+- Position size limit
+- Order notional limit
+- Max drawdown threshold
+- Parametric VaR (GBM-based, configurable confidence/horizon)
+
+### Execution Service
+Consumes approved orders, simulates fills for paper trading, publishes fill events.
+
+**Fill Models:**
+- Simple spread model (mid +/- half spread)
+- Walk-the-book (volume-weighted average across depth levels)
+- Brownian bridge slippage (models price movement during order latency)
+
+### Post-Trade Service *(Phase 4 — scaffolded, not yet wired)*
+PnL tracking, performance metrics, transaction cost analysis. Core logic is implemented and tested:
+- PnL tracker with average cost basis (realized + unrealized)
+- Sharpe, Sortino, Calmar ratios and max drawdown
+- TCA: spread cost, slippage, market impact, fee decomposition
+
+## Quick Start
+
+### Prerequisites
+- Docker Desktop (running)
+- Python 3.14
+- Git
+
+### Setup
+
+```bash
+git clone https://github.com/YOUR_USERNAME/quant-system.git
+cd quant-system
+python3.14 -m venv venv
+source venv/bin/activate
+pip install -e lib/
+pip install -r requirements-test.txt
+```
+
+### Run
+
+```bash
+make up                    # start everything
+make logs                  # watch output
+make db-trade-count        # verify data is flowing
+```
+
+### Stop
+
+```bash
+make down                  # stop containers (data persists)
+make clean                 # stop and delete all data
+```
+
+## Commands Reference
+
+### Docker Compose
+
+| Command              | Description                                       |
+|----------------------|---------------------------------------------------|
+| `make up`            | Start all services (infra + microservices)         |
+| `make up-infra`      | Start only infrastructure (Kafka, TimescaleDB, Redis) |
+| `make up-market-data`| Start market data service only                     |
+| `make up-storage`    | Start storage service only                         |
+| `make down`          | Stop all containers                                |
+| `make restart`       | Restart all containers                             |
+| `make build`         | Rebuild Docker images (needed after code changes)  |
+| `make status`        | Show which containers are running                  |
+| `make logs`          | Tail logs from all services                        |
+| `make logs-market-data` | Tail market data logs only                      |
+| `make logs-storage`  | Tail storage logs only                             |
+
+### Database (TimescaleDB)
+
+| Command              | Description                                       |
+|----------------------|---------------------------------------------------|
+| `make db-shell`      | Open a psql prompt into TimescaleDB                |
+| `make db-trade-count`| Count stored trades per symbol                     |
+| `make db-ohlcv`      | Show the latest 1-minute OHLCV candle bars         |
+| `make db-book-count` | Count order book snapshots                         |
+| `make db-schema`     | Show hypertables and compression status            |
+
+### Kafka
+
+| Command                  | Description                                   |
+|--------------------------|-----------------------------------------------|
+| `make kafka-topics`      | List all Kafka topics                          |
+| `make kafka-consume-trades` | Print 10 messages from the trades topic     |
+| `make kafka-consume-depth`  | Print 5 messages from the depth topic       |
+| `make kafka-offsets`     | Show consumer group lag/offsets                |
+
+### Redis
+
+| Command              | Description                                       |
+|----------------------|---------------------------------------------------|
+| `make redis-cli`     | Open an interactive Redis shell                    |
+| `make redis-keys`    | List all keys currently in Redis                   |
+
+### Testing
+
+| Command              | Description                                       |
+|----------------------|---------------------------------------------------|
+| `make test`          | Run all unit tests                                 |
+| `make test-cov`      | Run tests with coverage report                     |
+| `make test-lib`      | Run shared library tests only                      |
+| `make test-market-data` | Run market data tests only                      |
+| `make test-storage`  | Run storage tests only                             |
+| `make test-alpha`    | Run alpha engine tests only                        |
+| `make test-risk`     | Run risk gateway tests only                        |
+| `make test-execution`| Run execution service tests only                   |
+| `make test-post-trade` | Run post-trade tests only                        |
+| `make test-watch`    | Auto-rerun tests on file changes                   |
+
+### Linting & Formatting
+
+| Command              | Description                                       |
+|----------------------|---------------------------------------------------|
+| `make lint`          | Check code with ruff (no changes)                  |
+| `make lint-fix`      | Auto-fix linting issues                            |
+| `make format`        | Format code with ruff                              |
+
+### Cleanup
+
+| Command              | Description                                       |
+|----------------------|---------------------------------------------------|
+| `make clean`         | Stop everything and delete all data volumes        |
+| `make clean-images`  | Remove built Docker images                         |
+
+## Project Structure
+
+```
+quant-system/
+├── lib/quant_core/              # Shared library (models, Kafka/Redis helpers, config)
+│   ├── models.py                #   Trade, DepthUpdate, Signal, Order, Fill, RiskDecision
+│   ├── kafka_utils.py           #   QProducer, QConsumer with backtest_id injection
+│   ├── redis_utils.py           #   Key schema and connection factories
+│   ├── config.py                #   Environment-based config
+│   └── logging.py               #   Structured JSON logging
+├── services/
+│   ├── market-data/             # Coinbase WebSocket → Kafka
+│   │   └── market_data_svc/
+│   ├── storage/                 # Kafka → TimescaleDB (batch COPY)
+│   │   └── storage_svc/
+│   ├── alpha-engine/            # Strategies, order book, feature engine
+│   │   └── alpha_engine_svc/
+│   │       └── strategies/      #   mean_reversion.py, linear_regression.py
+│   ├── risk-gateway/            # Risk checks, VaR model
+│   │   └── risk_gateway_svc/
+│   ├── execution/               # Fill simulator (spread, walk-book, Brownian bridge)
+│   │   └── execution_svc/
+│   └── post-trade/              # PnL, metrics, TCA (Phase 4)
+│       └── post_trade_svc/
+├── scripts/
+│   ├── init_db.sql              # TimescaleDB schema, hypertables, aggregates
+│   └── create_topics.sh         # Kafka topic creation
+├── docker-compose.yml
+├── Makefile
+├── pyproject.toml
+└── .github/workflows/ci.yml
+```
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for the full implementation plan.
