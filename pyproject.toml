@@ -16,6 +16,7 @@ testpaths = [
     "cpp/tests",
 ]
 asyncio_mode = "auto"
+norecursedirs = ["node_modules", "dist", "cpp/build", "venv", ".git"]
 addopts = "-v --tb=short -q"
 markers = [
     "integration: marks tests requiring live infrastructure (Kafka, DB, Redis)",
@@ -45,7 +46,7 @@ fail_under = 80
 [tool.ruff]
 target-version = "py314"
 line-length = 120
-exclude = ["venv", ".git", "__pycache__", "*.egg-info"]
+exclude = ["venv", ".git", "__pycache__", "*.egg-info", "node_modules", "cpp/build"]
 
 [tool.ruff.lint]
 select = [

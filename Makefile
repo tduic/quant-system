@@ -152,15 +152,17 @@ test-watch: ## Run tests in watch mode (requires pytest-watch)
 # Linting & Formatting
 # ---------------------------------------------------------------------------
 
+PYTHON_DIRS = lib/ services/market-data/ services/storage/ services/alpha-engine/ services/risk-gateway/ services/execution/ services/post-trade/post_trade_svc/ services/post-trade/tests/ services/backtest/ conftest.py
+
 lint: ## Check code with ruff (no changes)
-	ruff check lib/ services/ conftest.py
-	ruff format --check lib/ services/ conftest.py
+	ruff check $(PYTHON_DIRS)
+	ruff format --check $(PYTHON_DIRS)
 
 lint-fix: ## Auto-fix linting issues
-	ruff check --fix lib/ services/ conftest.py
+	ruff check --fix $(PYTHON_DIRS)
 
 format: ## Format code with ruff
-	ruff format lib/ services/ conftest.py
+	ruff format $(PYTHON_DIRS)
 
 # ---------------------------------------------------------------------------
 # Backtesting

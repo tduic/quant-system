@@ -35,10 +35,10 @@ jobs:
           pip install -r requirements-test.txt
 
       - name: Lint
-        run: ruff check lib/ services/ conftest.py
+        run: ruff check lib/ services/market-data/ services/storage/ services/alpha-engine/ services/risk-gateway/ services/execution/ services/post-trade/post_trade_svc/ services/post-trade/tests/ services/backtest/ conftest.py
 
       - name: Format check
-        run: ruff format --check lib/ services/ conftest.py
+        run: ruff format --check lib/ services/market-data/ services/storage/ services/alpha-engine/ services/risk-gateway/ services/execution/ services/post-trade/post_trade_svc/ services/post-trade/tests/ services/backtest/ conftest.py
 
       - name: Run tests with coverage
         run: python -m pytest --cov --cov-report=term-missing
