@@ -42,6 +42,7 @@ class RiskLimits:
     max_order_notional: float = 100_000.0  # max single order value in USD
     max_drawdown_pct: float = 0.05  # 5% max drawdown
     max_total_exposure: float = 500_000.0  # max total notional exposure
+    max_var_pct: float = 0.02  # max VaR as % of equity (2%)
 
 
 def check_position_size(signal: Signal, state: PortfolioState, limits: RiskLimits) -> str | None:
@@ -71,7 +72,25 @@ def check_drawdown(state: PortfolioState, limits: RiskLimits) -> str | None:
     return None
 
 
-def run_risk_checks(signal: Signal, state: PortfolioState, limits: RiskLimits) -> RiskDecision:
+def check_var(state: PortfolioState, limits: RiskLimits, var_pct: float | None = None) -> str | None:
+    """Check that estimated VaR is within limits.
+
+    var_pct is provided by the ParametricVaR model externally.
+    If not provided, the check passes (graceful degradation).
+    """
+    if var_pct is None:
+        return None  # no VaR estimate available, pass
+    if var_pct > limits.max_var_pct:
+        return f"var: estimated {var_pct:.2%} exceeds limit {limits.max_var_pct:.2%}"
+    return None
+
+
+def run_risk_checks(
+    signal: Signal,
+    state: PortfolioState,
+    limits: RiskLimits,
+    var_pct: float | None = None,
+) -> RiskDecision:
     """Run all risk checks and return a decision."""
     checks_passed = []
     checks_failed = []
@@ -81,6 +100,7 @@ def run_risk_checks(signal: Signal, state: PortfolioState, limits: RiskLimits) -
         ("position_size", check_position_size(signal, state, limits)),
         ("order_notional", check_order_notional(signal, limits)),
         ("drawdown", check_drawdown(state, limits)),
+        ("var", check_var(state, limits, var_pct)),
     ]:
         if result is None:
             checks_passed.append(check_name)

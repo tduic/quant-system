@@ -11,6 +11,7 @@ from risk_gateway_svc.risk_checks import (
     check_drawdown,
     check_order_notional,
     check_position_size,
+    check_var,
     run_risk_checks,
 )
 
@@ -104,7 +105,7 @@ class TestRunRiskChecks:
     def test_all_pass_approved(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
         decision = run_risk_checks(signal, flat_state, limits)
         assert decision.decision == "APPROVED"
-        assert len(decision.checks_passed) == 3
+        assert len(decision.checks_passed) == 4  # position, notional, drawdown, var
         assert len(decision.checks_failed) == 0
         assert decision.adjusted_quantity == signal.target_quantity
 
@@ -129,3 +130,31 @@ class TestRunRiskChecks:
     def test_timestamp_set(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
         decision = run_risk_checks(signal, flat_state, limits)
         assert decision.timestamp > 0
+
+    def test_var_check_rejects_when_exceeded(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
+        decision = run_risk_checks(signal, flat_state, limits, var_pct=0.10)
+        assert decision.decision == "REJECTED"
+        assert "var" in decision.checks_failed
+
+    def test_var_check_passes_when_within_limit(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
+        decision = run_risk_checks(signal, flat_state, limits, var_pct=0.01)
+        assert decision.decision == "APPROVED"
+        assert "var" in decision.checks_passed
+
+    def test_var_check_passes_when_none(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
+        decision = run_risk_checks(signal, flat_state, limits, var_pct=None)
+        assert decision.decision == "APPROVED"
+        assert "var" in decision.checks_passed
+
+
+class TestCheckVar:
+    def test_none_var_passes(self, flat_state: PortfolioState, limits: RiskLimits):
+        assert check_var(flat_state, limits, var_pct=None) is None
+
+    def test_within_limit_passes(self, flat_state: PortfolioState, limits: RiskLimits):
+        assert check_var(flat_state, limits, var_pct=0.01) is None
+
+    def test_exceeds_limit_fails(self, flat_state: PortfolioState, limits: RiskLimits):
+        result = check_var(flat_state, limits, var_pct=0.05)
+        assert result is not None
+        assert "var" in result
