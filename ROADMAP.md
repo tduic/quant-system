@@ -61,15 +61,69 @@
 - [x] Python test suite for C++ module (24 tests, skipped if not built)
 - [x] CI job: builds C++, runs native tests, installs module, runs Python tests
 
+### Phase 7 — Dashboard Frontend (Weeks 15-16)
+- [x] TypeScript React 19 frontend (`services/post-trade/frontend/`)
+- [x] Vite build tooling with Tailwind CSS
+- [x] 6 tabs matching the FastAPI endpoints (P&L, TCA, Alpha Decay, Risk Metrics, Drawdown, Fills)
+- [x] Auto-refreshing data via polling (5-second interval)
+- [x] Equity curve and drawdown charts with recharts
+- [x] Excel download button in header
+- [x] Responsive grid layout with dark theme
+- [x] Shared components (Card, LoadingSpinner) and typed API client
+- [x] CORS middleware on FastAPI for development
+- [x] Dockerfile (multi-stage: node build → nginx serve) with API reverse proxy
+- [x] Docker Compose service (port 3000)
+- [x] Makefile commands (fe-install, fe-dev, fe-build, fe-lint)
+- [x] CI job: npm ci, tsc --noEmit, npm run build
+
 ## Up Next
 
-### Phase 7 — Dashboard Frontend (Weeks 15-16)
-- [ ] TypeScript React frontend (`services/post-trade/frontend/`)
-- [ ] 6 tabs matching the FastAPI endpoints
-- [ ] Real-time updates via WebSocket from FastAPI
-- [ ] Charts with recharts/d3
-- [ ] Excel download button
-- [ ] Responsive layout
+### Phase 8 — Alpha Decay Implementation
+- [ ] Add signal-level IC (information coefficient) tracking to the alpha engine
+- [ ] Log predicted vs actual return at multiple horizons (1m, 5m, 15m, 1h) per signal
+- [ ] Compute rolling IC and IC decay curves in the post-trade service
+- [ ] Wire alpha decay data into the existing dashboard tab (replace placeholder)
+- [ ] Backtest integration: alpha decay analysis per backtest run
+
+### Phase 9 — Multi-Symbol Support
+- [ ] Extend market data service to subscribe to multiple symbols concurrently (ETH-USD, SOL-USD, etc.)
+- [ ] Per-symbol Kafka partitioning and storage pipelines
+- [ ] Cross-asset feature engine inputs (correlation, relative strength)
+- [ ] Portfolio-level position tracking and risk aggregation
+- [ ] Pairs trading signal infrastructure
+- [ ] Dashboard updates: symbol selector/filter across all tabs
+
+### Phase 10 — Backtest Improvements
+- [ ] Walk-forward optimization (rolling train/test windows)
+- [ ] Parameter sensitivity analysis (grid/random search over strategy params)
+- [ ] Monte Carlo simulation of trade sequences for confidence intervals on Sharpe/drawdown
+- [ ] Backtest comparison view: side-by-side metrics for multiple runs
+- [ ] Slippage/fee sensitivity sweeps
+- [ ] Out-of-sample validation reporting
+
+### Phase 11 — More Strategies
+- [ ] Momentum/trend-following strategy (breakout or moving-average crossover)
+- [ ] Order flow imbalance strategy (trade-level buy/sell pressure)
+- [ ] Strategy combination framework (ensemble signals with weighted voting)
+- [ ] Strategy-level performance attribution in post-trade dashboard
+- [ ] Strategy parameter auto-tuning via backtest grid search
+
+### Phase 12 — Monitoring & Alerting
+- [ ] Prometheus metrics exporter per service (latency, throughput, error rates)
+- [ ] Grafana dashboards for system health (Kafka lag, fill latency, order book staleness)
+- [ ] Risk breach alerts (max drawdown, position limit violations)
+- [ ] Service heartbeat monitoring and dead-letter queue for failed messages
+- [ ] Structured log aggregation (ELK or Loki)
+- [ ] Alerting integration (PagerDuty, Slack webhook, or email)
+
+### Phase 13 — Live Trading Prep
+- [ ] Coinbase authenticated REST API adapter for real order placement
+- [ ] Order lifecycle management (new → ack → partial fill → filled/cancelled)
+- [ ] Position reconciliation against exchange balances
+- [ ] Kill switch: emergency flat-all with single command
+- [ ] Rate limiting and retry logic for exchange API
+- [ ] Audit trail: immutable log of every order sent and fill received
+- [ ] Deployment hardening: secrets management, TLS, health monitoring
 
 ## Design Decisions
 

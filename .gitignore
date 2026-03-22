@@ -33,6 +33,14 @@ Thumbs.db
 .env
 .env.local
 
+# Node / Frontend
+node_modules/
+services/post-trade/frontend/dist/
+
+# C++ build artifacts
+cpp/build/
+cpp/*.egg-info/
+
 # Backtest results
 .backtest_results/
 

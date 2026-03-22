@@ -56,13 +56,14 @@ Coinbase WebSocket
 
 ## Tech Stack
 
-- **Language**: Python 3.14 (C++ via pybind11 planned for performance-critical paths)
+- **Language**: Python 3.14 (C++ via pybind11 for performance-critical paths)
+- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS + recharts
 - **Messaging**: Apache Kafka (confluent-kafka)
 - **Database**: TimescaleDB (PostgreSQL + time-series extensions)
 - **Cache**: Redis
 - **Containers**: Docker Compose
 - **CI**: GitHub Actions
-- **Linting**: Ruff
+- **Linting**: Ruff (Python), TypeScript strict mode (frontend)
 - **Testing**: pytest + pytest-cov
 
 ## Services
@@ -108,6 +109,9 @@ Consumes fills and trade data from Kafka, computes real-time analytics, and serv
 - `GET /api/drawdown` — Equity curve + running drawdown curve
 - `GET /api/fills` — Fill details + summary stats
 - `GET /api/export/excel` — Download formatted .xlsx report (5 sheets)
+
+### Dashboard Frontend
+React 19 + TypeScript SPA served via nginx on port 3000 (Docker) or Vite dev server. Features 6 tabs matching the FastAPI endpoints, auto-refreshing data every 5 seconds, equity/drawdown charts with recharts, and an Excel download button. In Docker, nginx reverse-proxies `/api/` to the post-trade FastAPI backend.
 
 ### Backtest Service
 Replays historical tick data from TimescaleDB through the same Kafka pipeline with a `backtest_id` header. All downstream services process backtest data identically to live — no `if backtest:` branches. Three replay modes: as_fast_as_possible, real_time, and scaled (Nx speed).
@@ -238,6 +242,15 @@ make cpp-install      # one-time: compile and install the .so
 make cpp-benchmark    # see the speedup numbers
 ```
 
+### Frontend (React Dashboard)
+
+| Command              | Description                                       |
+|----------------------|---------------------------------------------------|
+| `make fe-install`    | Install frontend npm dependencies                  |
+| `make fe-dev`        | Start Vite dev server (localhost:3000, proxies API to :8080) |
+| `make fe-build`      | Build frontend for production                      |
+| `make fe-lint`       | Type-check frontend with TypeScript                |
+
 ### Linting & Formatting
 
 | Command              | Description                                       |
@@ -276,7 +289,8 @@ quant-system/
 │   ├── execution/               # Fill simulator (spread, walk-book, Brownian bridge)
 │   │   └── execution_svc/
 │   ├── post-trade/              # PnL, metrics, TCA, FastAPI dashboard
-│   │   └── post_trade_svc/
+│   │   ├── post_trade_svc/
+│   │   └── frontend/            # React + TypeScript dashboard (Vite, Tailwind, recharts)
 │   └── backtest/                # Replay engine + CLI
 │       └── backtest_svc/
 ├── scripts/

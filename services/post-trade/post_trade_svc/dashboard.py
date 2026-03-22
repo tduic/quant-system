@@ -11,6 +11,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 if TYPE_CHECKING:
@@ -26,6 +27,14 @@ def create_app(state: PostTradeState) -> FastAPI:
         title="Quant Post-Trade Dashboard",
         description="Real-time post-trade analytics",
         version="0.1.0",
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @app.get("/health")
@@ -47,7 +56,7 @@ def create_app(state: PostTradeState) -> FastAPI:
     def alpha_decay():
         return {
             "status": "placeholder",
-            "description": "Alpha decay curves require signal-level IC tracking. Coming in Phase 5 (backtesting).",
+            "description": "Alpha decay curves require signal-level IC (information coefficient) tracking in the alpha engine. This will measure how signal predictiveness decays over time after emission.",
         }
 
     # Tab 4: Risk Metrics

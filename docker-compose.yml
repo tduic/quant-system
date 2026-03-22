@@ -198,6 +198,21 @@ services:
       LOG_LEVEL: INFO
     restart: unless-stopped
 
+  # -------------------------------------------------------------------------
+  # Phase 7: Dashboard Frontend
+  # -------------------------------------------------------------------------
+
+  dashboard:
+    build:
+      context: services/post-trade/frontend
+      dockerfile: Dockerfile
+    container_name: quant-dashboard
+    depends_on:
+      - post-trade
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
 volumes:
   timescale_data:
     driver: local

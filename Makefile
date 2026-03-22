@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-cpp test-watch lint lint-fix format backtest backtest-list backtest-results cpp-build cpp-install cpp-test cpp-benchmark cpp-clean
+.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-cpp test-watch lint lint-fix format backtest backtest-list backtest-results cpp-build cpp-install cpp-test cpp-benchmark cpp-clean fe-install fe-dev fe-build fe-lint
 
 # Default target
 help: ## Show this help
@@ -18,7 +18,8 @@ up: ## Start all services (infra + services)
 	@echo "  TimescaleDB:  localhost:5432"
 	@echo "  Kafka:        localhost:9092"
 	@echo "  Redis:        localhost:6379"
-	@echo "  Dashboard:    localhost:8080 (when post-trade is running)"
+	@echo "  Dashboard API: localhost:8080 (post-trade FastAPI)"
+	@echo "  Dashboard UI:  localhost:3000 (React frontend)"
 	@echo ""
 	@echo "Run 'make logs' to follow service output"
 
@@ -198,6 +199,24 @@ cpp-benchmark: ## Run C++/Python performance comparison
 
 cpp-clean: ## Clean C++ build artifacts
 	rm -rf cpp/build cpp/*.egg-info cpp/dist
+
+# ---------------------------------------------------------------------------
+# Frontend (React Dashboard)
+# ---------------------------------------------------------------------------
+
+FRONTEND_DIR = services/post-trade/frontend
+
+fe-install: ## Install frontend dependencies
+	cd $(FRONTEND_DIR) && npm ci
+
+fe-dev: ## Start frontend dev server (localhost:3000, proxies API to :8080)
+	cd $(FRONTEND_DIR) && npm run dev
+
+fe-build: ## Build frontend for production
+	cd $(FRONTEND_DIR) && npm run build
+
+fe-lint: ## Type-check and lint frontend code
+	cd $(FRONTEND_DIR) && npx tsc --noEmit
 
 # ---------------------------------------------------------------------------
 # Cleanup

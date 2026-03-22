@@ -100,3 +100,28 @@ jobs:
 
       - name: Build post-trade image
         run: docker build -f services/post-trade/Dockerfile -t quant-post-trade .
+
+  frontend-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: services/post-trade/frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/post-trade/frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: services/post-trade/frontend
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: services/post-trade/frontend
+        run: npm run build
