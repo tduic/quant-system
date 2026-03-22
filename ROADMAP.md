@@ -39,8 +39,6 @@
 - [x] Excel export endpoint (formatted .xlsx with 5 sheets, styled headers)
 - [x] Post-trade service enabled in docker-compose (port 8080)
 
-## Up Next
-
 ### Phase 5 — Backtesting (Weeks 9-10)
 - [x] Replay engine: reads historical ticks from TimescaleDB, publishes to Kafka with backtest_id
 - [x] `backtest_id` header auto-injected on every message via QProducer
@@ -52,12 +50,18 @@
 - [x] Database writes tagged with backtest_id for separate analysis
 
 ### Phase 6 — C++ Performance (Weeks 11-14)
-- [ ] pybind11 build infrastructure (CMake, shared library compilation)
-- [ ] C++ OrderBook: L2 book with price-level map, O(1) best bid/ask
-- [ ] C++ FeatureEngine: rolling statistics with online algorithms
-- [ ] C++ MatchingEngine: realistic fill simulation with queue priority
-- [ ] Python interface preserved — swap `.so` imports, no service code changes
-- [ ] Benchmark suite comparing Python vs C++ throughput
+- [x] pybind11 build infrastructure (CMake + setup.py, fetches pybind11 automatically)
+- [x] C++ OrderBook: L2 book with `std::map` (reverse-sorted bids, forward-sorted asks), O(log n) insert, O(1) best bid/ask
+- [x] C++ FeatureEngine: rolling VWAP, volatility, trade imbalance, trade rate with online sum tracking
+- [x] C++ MatchingEngine: walk-the-book + Brownian bridge + simple spread models, deterministic PRNG (xorshift64)
+- [x] Full pybind11 bindings preserving Python interface — swap imports, no service code changes
+- [x] Transparent import switching (`quant_core.accelerated`): tries C++ first, falls back to Python
+- [x] Benchmark suite comparing Python vs C++ throughput
+- [x] Native C++ test suite (28 assertions across 3 test executables)
+- [x] Python test suite for C++ module (24 tests, skipped if not built)
+- [x] CI job: builds C++, runs native tests, installs module, runs Python tests
+
+## Up Next
 
 ### Phase 7 — Dashboard Frontend (Weeks 15-16)
 - [ ] TypeScript React frontend (`services/post-trade/frontend/`)

@@ -1,0 +1,10 @@
+[build-system]
+requires = ["setuptools>=64", "pybind11>=2.13"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quant_cpp"
+version = "0.1.0"
+description = "C++ performance-critical components for the quant trading system"
+requires-python = ">=3.12"
+dependencies = []

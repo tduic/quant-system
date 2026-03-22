@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-watch lint lint-fix format backtest backtest-list backtest-results
+.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-cpp test-watch lint lint-fix format backtest backtest-list backtest-results cpp-build cpp-install cpp-test cpp-benchmark cpp-clean
 
 # Default target
 help: ## Show this help
@@ -175,6 +175,29 @@ backtest-list: ## List all backtest runs
 
 backtest-results: ## Show results for a backtest (usage: make backtest-results ID=bt-abc123)
 	$(BACKTEST_PYTHONPATH) python -m backtest_svc.cli results --backtest-id $(ID)
+
+# ---------------------------------------------------------------------------
+# C++ (pybind11)
+# ---------------------------------------------------------------------------
+
+cpp-build: ## Build C++ module with CMake (native tests only)
+	cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
+	cmake --build cpp/build -j$(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
+cpp-install: ## Install quant_cpp Python module into current env
+	pip install ./cpp/
+
+cpp-test: cpp-build ## Run C++ native tests
+	cd cpp/build && ctest --output-on-failure
+
+test-cpp: ## Run Python tests for C++ module (requires cpp-install first)
+	python -m pytest cpp/tests/test_quant_cpp.py -v
+
+cpp-benchmark: ## Run C++/Python performance comparison
+	PYTHONPATH=lib:services/alpha-engine python cpp/benchmark.py
+
+cpp-clean: ## Clean C++ build artifacts
+	rm -rf cpp/build cpp/*.egg-info cpp/dist
 
 # ---------------------------------------------------------------------------
 # Cleanup

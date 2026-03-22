@@ -221,6 +221,23 @@ make clean                 # stop and delete all data
 
 Backtest args: `--symbol BTCUSD --start 2026-03-21T00:00:00 --end 2026-03-21T12:00:00 [--speed as_fast_as_possible|real_time|scaled] [--multiplier 10] [--no-depth]`
 
+### C++ (pybind11)
+
+| Command              | Description                                       |
+|----------------------|---------------------------------------------------|
+| `make cpp-build`     | Build C++ with CMake (native tests only)           |
+| `make cpp-install`   | Install quant_cpp module into current Python env   |
+| `make cpp-test`      | Run C++ native tests (builds first if needed)      |
+| `make test-cpp`      | Run Python tests for C++ module                    |
+| `make cpp-benchmark` | Run Python vs C++ performance comparison           |
+| `make cpp-clean`     | Clean C++ build artifacts                          |
+
+To use C++ acceleration:
+```bash
+make cpp-install      # one-time: compile and install the .so
+make cpp-benchmark    # see the speedup numbers
+```
+
 ### Linting & Formatting
 
 | Command              | Description                                       |

@@ -13,6 +13,7 @@ testpaths = [
     "services/execution/tests",
     "services/post-trade/tests",
     "services/backtest/tests",
+    "cpp/tests",
 ]
 asyncio_mode = "auto"
 addopts = "-v --tb=short -q"
