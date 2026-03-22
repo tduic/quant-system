@@ -1,34 +1,37 @@
-import { useState, useEffect } from 'react';
-import type { TabId } from './types';
-import { api } from './api';
-import { PnLTab } from './tabs/PnLTab';
-import { TCATab } from './tabs/TCATab';
-import { AlphaDecayTab } from './tabs/AlphaDecayTab';
-import { RiskMetricsTab } from './tabs/RiskMetricsTab';
-import { DrawdownTab } from './tabs/DrawdownTab';
-import { FillsTab } from './tabs/FillsTab';
+import { useState, useEffect } from "react";
+import type { TabId } from "./types";
+import { api } from "./api";
+import { PnLTab } from "./tabs/PnLTab";
+import { TCATab } from "./tabs/TCATab";
+import { AlphaDecayTab } from "./tabs/AlphaDecayTab";
+import { RiskMetricsTab } from "./tabs/RiskMetricsTab";
+import { DrawdownTab } from "./tabs/DrawdownTab";
+import { FillsTab } from "./tabs/FillsTab";
+import { AnalysisTab } from "./tabs/AnalysisTab";
 
 const TABS: { id: TabId; label: string }[] = [
-  { id: 'pnl', label: 'P&L' },
-  { id: 'tca', label: 'TCA' },
-  { id: 'alpha-decay', label: 'Alpha Decay' },
-  { id: 'risk-metrics', label: 'Risk Metrics' },
-  { id: 'drawdown', label: 'Drawdown' },
-  { id: 'fills', label: 'Fills' },
+  { id: "pnl", label: "P&L" },
+  { id: "tca", label: "TCA" },
+  { id: "alpha-decay", label: "Alpha Decay" },
+  { id: "risk-metrics", label: "Risk Metrics" },
+  { id: "drawdown", label: "Drawdown" },
+  { id: "fills", label: "Fills" },
+  { id: "analysis", label: "Analysis" },
 ];
 
 const TAB_COMPONENTS: Record<TabId, React.FC<{ symbol?: string }>> = {
   pnl: PnLTab,
   tca: TCATab,
-  'alpha-decay': AlphaDecayTab,
-  'risk-metrics': RiskMetricsTab,
+  "alpha-decay": AlphaDecayTab,
+  "risk-metrics": RiskMetricsTab,
   drawdown: DrawdownTab,
   fills: FillsTab,
+  analysis: AnalysisTab,
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<TabId>('pnl');
-  const [selectedSymbol, setSelectedSymbol] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<TabId>("pnl");
+  const [selectedSymbol, setSelectedSymbol] = useState<string>("");
   const [symbols, setSymbols] = useState<string[]>([]);
   const ActiveComponent = TAB_COMPONENTS[activeTab];
 
@@ -61,7 +64,9 @@ export default function App() {
             >
               <option value="">All Symbols</option>
               {symbols.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
             <button
@@ -80,8 +85,8 @@ export default function App() {
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 activeTab === tab.id
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600'
+                  ? "border-blue-500 text-blue-400"
+                  : "border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600"
               }`}
             >
               {tab.label}

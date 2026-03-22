@@ -1,9 +1,9 @@
-import { api } from '../api';
-import { Card } from '../components/Card';
-import { LoadingSpinner } from '../components/LoadingSpinner';
-import { usePolling } from '../hooks/usePolling';
+import { api } from "../api";
+import { Card } from "../components/Card";
+import { LoadingSpinner } from "../components/LoadingSpinner";
+import { usePolling } from "../hooks/usePolling";
 
-import { useCallback } from 'react';
+import { useCallback } from "react";
 
 export function PnLTab({ symbol }: { symbol?: string }) {
   const fetcher = useCallback(() => api.getPnL(symbol), [symbol]);
@@ -18,18 +18,38 @@ export function PnLTab({ symbol }: { symbol?: string }) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card title="Current Equity" value={`$${data.current_equity.toLocaleString()}`} />
-        <Card title="Total Return" value={`${data.total_return_pct.toFixed(2)}%`} positive={returnPositive} />
-        <Card title="Realized P&L" value={`$${data.total_realized_pnl.toLocaleString()}`} positive={data.total_realized_pnl >= 0} />
-        <Card title="Unrealized P&L" value={`$${data.total_unrealized_pnl.toLocaleString()}`} positive={data.total_unrealized_pnl >= 0} />
+        <Card
+          title="Current Equity"
+          value={`$${data.current_equity.toLocaleString()}`}
+        />
+        <Card
+          title="Total Return"
+          value={`${data.total_return_pct.toFixed(2)}%`}
+          positive={returnPositive}
+        />
+        <Card
+          title="Realized P&L"
+          value={`$${data.total_realized_pnl.toLocaleString()}`}
+          positive={data.total_realized_pnl >= 0}
+        />
+        <Card
+          title="Unrealized P&L"
+          value={`$${data.total_unrealized_pnl.toLocaleString()}`}
+          positive={data.total_unrealized_pnl >= 0}
+        />
         <Card title="Total Fees" value={`$${data.total_fees.toFixed(4)}`} />
         <Card title="Total Fills" value={data.num_fills} />
-        <Card title="Initial Equity" value={`$${data.initial_equity.toLocaleString()}`} />
+        <Card
+          title="Initial Equity"
+          value={`$${data.initial_equity.toLocaleString()}`}
+        />
       </div>
 
       {Object.keys(data.positions).length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">Positions</h3>
+          <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
+            Positions
+          </h3>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -45,18 +65,33 @@ export function PnLTab({ symbol }: { symbol?: string }) {
               </thead>
               <tbody>
                 {Object.entries(data.positions).map(([sym, pos]) => (
-                  <tr key={sym} className="border-b border-gray-800/50 hover:bg-gray-900/50">
+                  <tr
+                    key={sym}
+                    className="border-b border-gray-800/50 hover:bg-gray-900/50"
+                  >
                     <td className="py-2 px-3 font-medium">{sym}</td>
-                    <td className="text-right py-2 px-3">{pos.quantity.toFixed(6)}</td>
-                    <td className="text-right py-2 px-3">${pos.avg_entry_price.toLocaleString()}</td>
-                    <td className="text-right py-2 px-3">${pos.current_price.toLocaleString()}</td>
-                    <td className={`text-right py-2 px-3 ${pos.realized_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <td className="text-right py-2 px-3">
+                      {pos.quantity.toFixed(6)}
+                    </td>
+                    <td className="text-right py-2 px-3">
+                      ${pos.avg_entry_price.toLocaleString()}
+                    </td>
+                    <td className="text-right py-2 px-3">
+                      ${pos.current_price.toLocaleString()}
+                    </td>
+                    <td
+                      className={`text-right py-2 px-3 ${pos.realized_pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                    >
                       ${pos.realized_pnl.toFixed(2)}
                     </td>
-                    <td className={`text-right py-2 px-3 ${pos.unrealized_pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <td
+                      className={`text-right py-2 px-3 ${pos.unrealized_pnl >= 0 ? "text-emerald-400" : "text-red-400"}`}
+                    >
                       ${pos.unrealized_pnl.toFixed(2)}
                     </td>
-                    <td className="text-right py-2 px-3">${pos.total_fees.toFixed(4)}</td>
+                    <td className="text-right py-2 px-3">
+                      ${pos.total_fees.toFixed(4)}
+                    </td>
                   </tr>
                 ))}
               </tbody>

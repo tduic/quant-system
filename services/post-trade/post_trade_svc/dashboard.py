@@ -1,10 +1,13 @@
-"""FastAPI dashboard with 6 tabs + Excel export.
+"""FastAPI dashboard with 7 tabs + Excel export.
 
 Each tab has its own GET endpoint returning JSON. The Excel export
 bundles all tabs into a single workbook with separate sheets.
 
 Symbol filtering: all endpoints accept an optional `?symbol=` query
 parameter to filter data to a single symbol. Omit for portfolio-wide view.
+
+Tab 7 (Backtest Analysis) uses async job submission — POST to submit,
+GET to poll status, GET to retrieve results.
 """
 
 from __future__ import annotations
@@ -16,9 +19,20 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from post_trade_svc.analysis_jobs import JobStore
 
 if TYPE_CHECKING:
     from post_trade_svc.state import PostTradeState
+
+
+class AnalysisRequest(BaseModel):
+    """Request body for submitting an analysis job."""
+
+    analysis_type: str
+    params: dict = {}
+
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +103,68 @@ def create_app(state: PostTradeState) -> FastAPI:
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": "attachment; filename=post_trade_report.xlsx"},
         )
+
+    # ------------------------------------------------------------------
+    # Tab 7: Backtest Analysis — async job submission + polling
+    # ------------------------------------------------------------------
+
+    job_store = JobStore(max_workers=2)
+
+    @app.post("/api/analysis/submit")
+    def submit_analysis(req: AnalysisRequest):
+        """Submit an analysis job. Returns job_id for polling."""
+        job_id = job_store.submit(req.analysis_type, req.params)
+        return {"job_id": job_id}
+
+    @app.get("/api/analysis/status/{job_id}")
+    def job_status(job_id: str):
+        """Poll job status and progress."""
+        job = job_store.get(job_id)
+        if not job:
+            return {"error": "Job not found"}
+        return {
+            "job_id": job.job_id,
+            "analysis_type": job.analysis_type,
+            "status": job.status.value,
+            "progress": job.progress,
+            "error": job.error,
+            "has_result": job.result is not None,
+        }
+
+    @app.get("/api/analysis/result/{job_id}")
+    def job_result(job_id: str):
+        """Retrieve completed job result."""
+        job = job_store.get(job_id)
+        if not job:
+            return {"error": "Job not found"}
+        if job.result is None:
+            return {"error": "Job not yet completed", "status": job.status.value}
+        return {
+            "job_id": job.job_id,
+            "analysis_type": job.analysis_type,
+            "status": job.status.value,
+            "result": job.result,
+        }
+
+    @app.get("/api/analysis/jobs")
+    def list_jobs(limit: int = Query(20)):
+        """List recent analysis jobs."""
+        jobs = job_store.list_jobs(limit=limit)
+        return {
+            "jobs": [
+                {
+                    "job_id": j.job_id,
+                    "analysis_type": j.analysis_type,
+                    "status": j.status.value,
+                    "progress": j.progress,
+                    "created_at": j.created_at,
+                    "completed_at": j.completed_at,
+                    "has_result": j.result is not None,
+                    "error": j.error,
+                }
+                for j in jobs
+            ]
+        }
 
     return app
 

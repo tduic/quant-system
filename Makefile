@@ -1,4 +1,4 @@
-.PHONY: help up down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-cpp test-watch lint lint-fix format backtest backtest-list backtest-results cpp-build cpp-install cpp-test cpp-benchmark cpp-clean fe-install fe-dev fe-build fe-lint
+.PHONY: help up up-build down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-cpp test-watch lint lint-fix format backtest backtest-list backtest-results cpp-build cpp-install cpp-test cpp-benchmark cpp-clean fe-install fe-dev fe-build fe-lint
 
 # Default target
 help: ## Show this help
@@ -11,10 +11,22 @@ help: ## Show this help
 build: ## Build all service images
 	docker compose build
 
-up: ## Start all services (infra + services)
+up: ## Start all services (uses cached images)
 	docker compose up -d
 	@echo ""
 	@echo "=== Quant system starting ==="
+	@echo "  TimescaleDB:  localhost:5432"
+	@echo "  Kafka:        localhost:9092"
+	@echo "  Redis:        localhost:6379"
+	@echo "  Dashboard API: localhost:8080 (post-trade FastAPI)"
+	@echo "  Dashboard UI:  localhost:3000 (React frontend)"
+	@echo ""
+	@echo "Run 'make logs' to follow service output"
+
+up-build: ## Start all services, rebuild changed images
+	docker compose up -d --build
+	@echo ""
+	@echo "=== Quant system starting (rebuilt) ==="
 	@echo "  TimescaleDB:  localhost:5432"
 	@echo "  Kafka:        localhost:9092"
 	@echo "  Redis:        localhost:6379"
@@ -115,10 +127,14 @@ redis-keys: ## List all Redis keys
 # Testing
 # ---------------------------------------------------------------------------
 
+FRONTEND_DIR = services/post-trade/frontend
 TEST_DIRS = lib/quant_core/tests services/market-data/tests services/storage/tests services/alpha-engine/tests services/risk-gateway/tests services/execution/tests services/post-trade/tests services/backtest/tests cpp/tests
 
-test: ## Run all unit tests
+test: ## Run all unit tests (Python + frontend type-check)
 	python -m pytest $(TEST_DIRS)
+	@echo ""
+	@echo "=== Frontend type-check ==="
+	cd $(FRONTEND_DIR) && npx tsc --noEmit
 
 test-cov: ## Run tests with coverage report
 	python -m pytest --cov --cov-report=term-missing --cov-report=html:htmlcov
@@ -156,15 +172,24 @@ test-watch: ## Run tests in watch mode (requires pytest-watch)
 
 PYTHON_DIRS = lib/ services/market-data/ services/storage/ services/alpha-engine/ services/risk-gateway/ services/execution/ services/post-trade/post_trade_svc/ services/post-trade/tests/ services/backtest/ conftest.py
 
-lint: ## Check code with ruff (no changes)
+lint: ## Check code with ruff + frontend type-check (no changes)
 	ruff check $(PYTHON_DIRS)
 	ruff format --check $(PYTHON_DIRS)
+	@echo ""
+	@echo "=== Frontend type-check ==="
+	cd $(FRONTEND_DIR) && npx tsc --noEmit
 
-lint-fix: ## Auto-fix linting issues
+lint-fix: ## Auto-fix linting issues (Python + frontend)
 	ruff check --fix $(PYTHON_DIRS)
+	@echo ""
+	@echo "=== Frontend auto-fix ==="
+	cd $(FRONTEND_DIR) && npx eslint src --fix
 
-format: ## Format code with ruff
+format: ## Format code with ruff + prettier
 	ruff format $(PYTHON_DIRS)
+	@echo ""
+	@echo "=== Frontend format ==="
+	cd $(FRONTEND_DIR) && npx prettier --write src/
 
 # ---------------------------------------------------------------------------
 # Backtesting
@@ -207,8 +232,6 @@ cpp-clean: ## Clean C++ build artifacts
 # ---------------------------------------------------------------------------
 # Frontend (React Dashboard)
 # ---------------------------------------------------------------------------
-
-FRONTEND_DIR = services/post-trade/frontend
 
 fe-install: ## Install frontend dependencies
 	cd $(FRONTEND_DIR) && npm ci

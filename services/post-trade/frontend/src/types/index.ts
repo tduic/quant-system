@@ -113,7 +113,7 @@ export interface HorizonIC {
 
 export interface StrategyAlphaDecay {
   signal_count: number;
-  horizons: Omit<HorizonIC, 'total_signals'>[];
+  horizons: Omit<HorizonIC, "total_signals">[];
 }
 
 export interface AlphaDecayData {
@@ -122,4 +122,47 @@ export interface AlphaDecayData {
   strategies: Record<string, StrategyAlphaDecay>;
 }
 
-export type TabId = 'pnl' | 'tca' | 'alpha-decay' | 'risk-metrics' | 'drawdown' | 'fills';
+// Backtest Analysis
+export type AnalysisType =
+  | "sensitivity"
+  | "walk_forward"
+  | "monte_carlo"
+  | "cost_sweep"
+  | "validate";
+
+export interface AnalysisJobSummary {
+  job_id: string;
+  analysis_type: AnalysisType;
+  status: "pending" | "running" | "completed" | "failed";
+  progress: number;
+  created_at: number;
+  completed_at: number | null;
+  has_result: boolean;
+  error: string | null;
+}
+
+export interface AnalysisJobStatus {
+  job_id: string;
+  analysis_type: string;
+  status: "pending" | "running" | "completed" | "failed";
+  progress: number;
+  error: string | null;
+  has_result: boolean;
+}
+
+export interface AnalysisJobResult {
+  job_id: string;
+  analysis_type: string;
+  status: string;
+  result: Record<string, unknown>;
+  error?: string;
+}
+
+export type TabId =
+  | "pnl"
+  | "tca"
+  | "alpha-decay"
+  | "risk-metrics"
+  | "drawdown"
+  | "fills"
+  | "analysis";

@@ -1,5 +1,5 @@
 # Python
-__pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
@@ -21,6 +21,7 @@ venv/
 htmlcov/
 .coverage
 .pytest_cache/
+.ruff_cache/
 
 # Docker
 timescale_data/
@@ -34,7 +35,7 @@ Thumbs.db
 .env.local
 
 # Node / Frontend
-node_modules/
+**/node_modules/
 services/post-trade/frontend/dist/
 
 # C++ build artifacts

@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Virtual environments
+venv
+.venv
+
+# Node
+**/node_modules
+**/dist
+
+# Python
+**/__pycache__
+**/*.pyc
+**/*.py[cod]
+**/*$py.class
+**/*.egg-info
+**/.pytest_cache
+**/.ruff_cache
+htmlcov
+.coverage
+
+# C++ build artifacts
+cpp/build
+cpp/*.egg-info
+
+# Backtest results
+.backtest_results
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker / repo meta
+docker-compose.yml
+Makefile
+README.md
+*.md
+
+# Environment / secrets
+.env
+.env.local
+
+# Test artifacts
+**/tests
+conftest.py
