@@ -18,7 +18,7 @@ function formatTime(ts: number): string {
   return new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-export function DrawdownTab() {
+export function DrawdownTab({ symbol: _symbol }: { symbol?: string }) {
   const { data, loading, error } = usePolling(api.getDrawdown, 5000);
 
   if (loading) return <LoadingSpinner />;

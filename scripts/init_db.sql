@@ -21,9 +21,12 @@ CREATE TABLE IF NOT EXISTS symbols (
     created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed BTC/USD (Coinbase)
+-- Seed supported symbols (Coinbase)
 INSERT INTO symbols (symbol, exchange, base_asset, quote_asset, tick_size, lot_size)
-VALUES ('BTCUSD', 'coinbase', 'BTC', 'USD', 0.01, 0.00000001)
+VALUES
+    ('BTCUSD', 'coinbase', 'BTC', 'USD', 0.01, 0.00000001),
+    ('ETHUSD', 'coinbase', 'ETH', 'USD', 0.01, 0.00001),
+    ('SOLUSD', 'coinbase', 'SOL', 'USD', 0.01, 0.001)
 ON CONFLICT (symbol) DO NOTHING;
 
 -- ==========================================================================

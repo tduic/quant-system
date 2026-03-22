@@ -11,6 +11,7 @@ from risk_gateway_svc.risk_checks import (
     check_drawdown,
     check_order_notional,
     check_position_size,
+    check_total_exposure,
     check_var,
     run_risk_checks,
 )
@@ -105,7 +106,7 @@ class TestRunRiskChecks:
     def test_all_pass_approved(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
         decision = run_risk_checks(signal, flat_state, limits)
         assert decision.decision == "APPROVED"
-        assert len(decision.checks_passed) == 4  # position, notional, drawdown, var
+        assert len(decision.checks_passed) == 5  # position, notional, drawdown, var, total_exposure
         assert len(decision.checks_failed) == 0
         assert decision.adjusted_quantity == signal.target_quantity
 
@@ -158,3 +159,55 @@ class TestCheckVar:
         result = check_var(flat_state, limits, var_pct=0.05)
         assert result is not None
         assert "var" in result
+
+
+class TestCheckTotalExposure:
+    def test_empty_portfolio_passes(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
+        # 0.5 * 80000 = 40000 < 500000 default limit
+        result = check_total_exposure(signal, flat_state, limits)
+        assert result is None
+
+    def test_within_limit_with_existing_positions(self, signal: Signal, limits: RiskLimits):
+        state = PortfolioState(
+            positions={"BTCUSD": 0.5, "ETHUSD": 2.0},
+            peak_equity=100_000.0,
+            current_equity=100_000.0,
+        )
+        prices = {"BTCUSD": 80_000.0, "ETHUSD": 3_000.0}
+        # Existing: 0.5*80000 + 2.0*3000 = 46000, plus proposed 0.5*80000 = 40000
+        # Total: 86000 < 500000
+        result = check_total_exposure(signal, state, limits, latest_prices=prices)
+        assert result is None
+
+    def test_exceeds_limit_rejected(self, signal: Signal, limits: RiskLimits):
+        limits = RiskLimits(max_total_exposure=50_000.0)
+        state = PortfolioState(
+            positions={"ETHUSD": 5.0},
+            peak_equity=100_000.0,
+            current_equity=100_000.0,
+        )
+        prices = {"ETHUSD": 3_000.0}
+        # Existing: 5.0*3000 = 15000, plus proposed 0.5*80000 = 40000
+        # Total: 55000 > 50000
+        result = check_total_exposure(signal, state, limits, latest_prices=prices)
+        assert result is not None
+        assert "total_exposure" in result
+
+    def test_no_prices_existing_exposure_zero(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
+        """Without price data, existing positions have zero exposure."""
+        flat_state.positions["ETHUSD"] = 10.0
+        # No prices dict → existing exposure = 0, only proposed counts
+        result = check_total_exposure(signal, flat_state, limits)
+        assert result is None  # 40000 < 500000
+
+    def test_multi_symbol_exposure_aggregated(self, signal: Signal, limits: RiskLimits):
+        limits = RiskLimits(max_total_exposure=200_000.0)
+        state = PortfolioState(
+            positions={"BTCUSD": 1.0, "ETHUSD": 10.0, "SOLUSD": 100.0},
+            peak_equity=100_000.0,
+            current_equity=100_000.0,
+        )
+        prices = {"BTCUSD": 80_000.0, "ETHUSD": 3_000.0, "SOLUSD": 150.0}
+        # Existing: 80000 + 30000 + 15000 = 125000, plus 40000 = 165000 < 200000
+        result = check_total_exposure(signal, state, limits, latest_prices=prices)
+        assert result is None

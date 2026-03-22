@@ -7,8 +7,11 @@ function formatTimestamp(ts: number): string {
   return new Date(ts * 1000).toLocaleString();
 }
 
-export function FillsTab() {
-  const { data, loading, error } = usePolling(api.getFills, 5000);
+import { useCallback } from 'react';
+
+export function FillsTab({ symbol }: { symbol?: string }) {
+  const fetcher = useCallback(() => api.getFills(symbol), [symbol]);
+  const { data, loading, error } = usePolling(fetcher, 5000);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <div className="text-red-400 p-4">Error: {error}</div>;

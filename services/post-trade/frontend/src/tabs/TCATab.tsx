@@ -1,10 +1,12 @@
+import { useCallback } from 'react';
 import { api } from '../api';
 import { Card } from '../components/Card';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { usePolling } from '../hooks/usePolling';
 
-export function TCATab() {
-  const { data, loading, error } = usePolling(api.getTCA, 5000);
+export function TCATab({ symbol }: { symbol?: string }) {
+  const fetcher = useCallback(() => api.getTCA(symbol), [symbol]);
+  const { data, loading, error } = usePolling(fetcher, 5000);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <div className="text-red-400 p-4">Error: {error}</div>;

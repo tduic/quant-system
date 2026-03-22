@@ -88,15 +88,21 @@
 - [x] 16 new tests covering signal recording, horizon filling, IC computation, and edge cases
 - [ ] Backtest integration: alpha decay analysis per backtest run (deferred to Phase 10)
 
-## Up Next
-
 ### Phase 9 — Multi-Symbol Support
-- [ ] Extend market data service to subscribe to multiple symbols concurrently (ETH-USD, SOL-USD, etc.)
-- [ ] Per-symbol Kafka partitioning and storage pipelines
-- [ ] Cross-asset feature engine inputs (correlation, relative strength)
-- [ ] Portfolio-level position tracking and risk aggregation
-- [ ] Pairs trading signal infrastructure
-- [ ] Dashboard updates: symbol selector/filter across all tabs
+- [x] Market data service extended to subscribe to BTC-USD, ETH-USD, SOL-USD concurrently
+- [x] SYMBOL_MAP expanded (exchange_ws.py), symbols table pre-seeded (init_db.sql)
+- [x] Docker Compose SYMBOLS env updated for market-data and alpha-engine services
+- [x] CrossAssetTracker: rolling Pearson correlation, relative strength, spread z-score between all symbol pairs
+- [x] PairsTradingStrategy: mean-reversion on log price ratio, z-score entry, counterpart leg signals
+- [x] Pairs strategies auto-registered for all C(n,2) symbol pairs in alpha engine
+- [x] Total exposure risk check: sum of abs(position × price) across all symbols, configurable limit
+- [x] Dashboard `/api/symbols` endpoint returns active symbols
+- [x] Symbol filter (`?symbol=`) on PnL, TCA, Alpha Decay, Fills endpoints
+- [x] Frontend symbol selector dropdown in header, propagated to all filterable tabs
+- [x] 15 new cross-asset tests, 10 pairs trading tests, 5 symbol-filtering dashboard tests, 5 total-exposure risk tests
+- [ ] Per-symbol backtest analysis (deferred to Phase 10)
+
+## Up Next
 
 ### Phase 10 — Backtest Improvements
 - [ ] Walk-forward optimization (rolling train/test windows)

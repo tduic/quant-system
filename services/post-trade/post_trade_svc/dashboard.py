@@ -2,6 +2,9 @@
 
 Each tab has its own GET endpoint returning JSON. The Excel export
 bundles all tabs into a single workbook with separate sheets.
+
+Symbol filtering: all endpoints accept an optional `?symbol=` query
+parameter to filter data to a single symbol. Omit for portfolio-wide view.
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ import io
 import logging
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -26,7 +29,7 @@ def create_app(state: PostTradeState) -> FastAPI:
     app = FastAPI(
         title="Quant Post-Trade Dashboard",
         description="Real-time post-trade analytics",
-        version="0.1.0",
+        version="0.2.0",
     )
 
     app.add_middleware(
@@ -41,20 +44,25 @@ def create_app(state: PostTradeState) -> FastAPI:
     def health():
         return {"status": "ok"}
 
+    @app.get("/api/symbols")
+    def active_symbols():
+        """Return list of symbols with active positions or recent fills."""
+        return state.get_active_symbols()
+
     # Tab 1: PnL Attribution
     @app.get("/api/pnl")
-    def pnl_summary():
-        return state.get_pnl_summary()
+    def pnl_summary(symbol: str | None = Query(None)):
+        return state.get_pnl_summary(symbol=symbol)
 
     # Tab 2: Transaction Cost Analysis
     @app.get("/api/tca")
-    def tca_summary():
-        return state.get_tca_summary()
+    def tca_summary(symbol: str | None = Query(None)):
+        return state.get_tca_summary(symbol=symbol)
 
     # Tab 3: Alpha Decay — IC at multiple time horizons
     @app.get("/api/alpha-decay")
-    def alpha_decay():
-        return state.get_alpha_decay()
+    def alpha_decay(symbol: str | None = Query(None)):
+        return state.get_alpha_decay(symbol=symbol)
 
     # Tab 4: Risk Metrics
     @app.get("/api/risk-metrics")
@@ -68,8 +76,8 @@ def create_app(state: PostTradeState) -> FastAPI:
 
     # Tab 6: Fill Analysis
     @app.get("/api/fills")
-    def fill_analysis():
-        return state.get_fill_analysis()
+    def fill_analysis(symbol: str | None = Query(None)):
+        return state.get_fill_analysis(symbol=symbol)
 
     # Excel Export
     @app.get("/api/export/excel")

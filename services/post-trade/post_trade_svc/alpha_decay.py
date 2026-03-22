@@ -180,9 +180,11 @@ class AlphaDecayTracker:
     # Dashboard data
     # -------------------------------------------------------------------
 
-    def get_alpha_decay_data(self) -> dict:
+    def get_alpha_decay_data(self, symbol: str | None = None) -> dict:
         """Return alpha decay data for the dashboard endpoint."""
         all_signals = list(self._signals)
+        if symbol:
+            all_signals = [s for s in all_signals if s.symbol == symbol.upper()]
 
         # Overall IC at each horizon
         horizons = []

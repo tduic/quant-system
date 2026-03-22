@@ -8,13 +8,15 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
+import { useCallback } from 'react';
 import { api } from '../api';
 import { Card } from '../components/Card';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { usePolling } from '../hooks/usePolling';
 
-export function AlphaDecayTab() {
-  const { data, loading, error } = usePolling(api.getAlphaDecay, 5000);
+export function AlphaDecayTab({ symbol }: { symbol?: string }) {
+  const fetcher = useCallback(() => api.getAlphaDecay(symbol), [symbol]);
+  const { data, loading, error } = usePolling(fetcher, 5000);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <div className="text-red-400 p-4">Error: {error}</div>;

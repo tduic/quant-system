@@ -85,11 +85,37 @@ def check_var(state: PortfolioState, limits: RiskLimits, var_pct: float | None =
     return None
 
 
+def check_total_exposure(
+    signal: Signal,
+    state: PortfolioState,
+    limits: RiskLimits,
+    latest_prices: dict[str, float] | None = None,
+) -> str | None:
+    """Check that total portfolio exposure across all symbols stays within limits.
+
+    Total exposure = sum of abs(position * price) for all symbols.
+    """
+    prices = latest_prices or {}
+    total_exposure = 0.0
+    for sym, qty in state.positions.items():
+        price = prices.get(sym, 0.0)
+        total_exposure += abs(qty * price)
+
+    # Add the proposed order's notional
+    proposed_notional = signal.target_quantity * signal.mid_price_at_signal
+    new_exposure = total_exposure + proposed_notional
+
+    if new_exposure > limits.max_total_exposure:
+        return f"total_exposure: projected {new_exposure:.2f} exceeds limit {limits.max_total_exposure:.2f}"
+    return None
+
+
 def run_risk_checks(
     signal: Signal,
     state: PortfolioState,
     limits: RiskLimits,
     var_pct: float | None = None,
+    latest_prices: dict[str, float] | None = None,
 ) -> RiskDecision:
     """Run all risk checks and return a decision."""
     checks_passed = []
@@ -101,6 +127,7 @@ def run_risk_checks(
         ("order_notional", check_order_notional(signal, limits)),
         ("drawdown", check_drawdown(state, limits)),
         ("var", check_var(state, limits, var_pct)),
+        ("total_exposure", check_total_exposure(signal, state, limits, latest_prices)),
     ]:
         if result is None:
             checks_passed.append(check_name)

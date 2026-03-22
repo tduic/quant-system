@@ -10,8 +10,10 @@ import asyncio
 import logging
 import signal
 
+from alpha_engine_svc.cross_asset import CrossAssetTracker
 from alpha_engine_svc.order_book import OrderBook
 from alpha_engine_svc.strategies.mean_reversion import MeanReversionStrategy
+from alpha_engine_svc.strategies.pairs_trading import PairsTradingStrategy
 from alpha_engine_svc.strategy import StrategyRegistry
 from quant_core.config import AppConfig
 from quant_core.kafka_utils import (
@@ -52,14 +54,33 @@ async def main() -> None:
     for sym in config.symbols:
         books[sym.upper()] = OrderBook(symbol=sym.upper())
 
+    # --- Cross-asset tracker (shared across strategies) ---
+    cross_asset = CrossAssetTracker(window=200)
+
     # --- Strategy registry ---
     registry = StrategyRegistry()
-    for sym in config.symbols:
+    symbols_upper = [s.upper() for s in config.symbols]
+
+    # Mean-reversion strategy per symbol
+    for sym in symbols_upper:
         strategy = MeanReversionStrategy(
-            strategy_id=f"mean_reversion_{sym}",
-            symbol=sym.upper(),
+            strategy_id=f"mean_reversion_{sym.lower()}",
+            symbol=sym,
         )
         registry.register(strategy)
+
+    # Pairs trading strategies for each unique pair
+    if len(symbols_upper) >= 2:
+        for i in range(len(symbols_upper)):
+            for j in range(i + 1, len(symbols_upper)):
+                sym_a, sym_b = symbols_upper[i], symbols_upper[j]
+                pairs_strat = PairsTradingStrategy(
+                    strategy_id=f"pairs_{sym_a.lower()}_{sym_b.lower()}",
+                    symbol=sym_a,
+                    symbol_b=sym_b,
+                    cross_asset_tracker=cross_asset,
+                )
+                registry.register(pairs_strat)
 
     # --- Counters ---
     trade_count = 0
@@ -111,6 +132,9 @@ async def main() -> None:
                 symbol = trade.symbol.upper()
                 trade_count += 1
 
+                # Feed cross-asset tracker
+                cross_asset.on_price(symbol, trade.timestamp_exchange, trade.price)
+
                 for strat in registry.strategies_for_symbol(symbol):
                     sig = strat.on_trade(trade)
                     if sig is not None:
@@ -127,6 +151,23 @@ async def main() -> None:
                             sig.strategy_id,
                             sig.metadata.get("z_score", 0),
                         )
+
+                        # If pairs strategy, also emit counterpart leg
+                        if isinstance(strat, PairsTradingStrategy):
+                            counterpart = strat.get_counterpart_signal()
+                            if counterpart is not None:
+                                producer.produce(
+                                    topic=TOPIC_SIGNALS,
+                                    key=counterpart.symbol,
+                                    value=counterpart.to_json(),
+                                )
+                                signal_count += 1
+                                logger.info(
+                                    "Pairs counterpart: %s %s %s",
+                                    counterpart.side,
+                                    counterpart.symbol,
+                                    counterpart.strategy_id,
+                                )
 
             elif topic == TOPIC_RAW_DEPTH:
                 depth = DepthUpdate.from_json(value)

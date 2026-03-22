@@ -180,12 +180,24 @@ class PostTradeState:
     # Dashboard data methods (all thread-safe)
     # -----------------------------------------------------------------------
 
-    def get_pnl_summary(self) -> dict:
+    def get_active_symbols(self) -> dict:
+        """Return list of symbols with positions or fills."""
+        with self._lock:
+            symbols = set()
+            for sym in self._portfolio.positions:
+                symbols.add(sym)
+            for f in self._fills:
+                symbols.add(f.symbol)
+            return {"symbols": sorted(symbols)}
+
+    def get_pnl_summary(self, symbol: str | None = None) -> dict:
         """Tab 1: PnL attribution."""
         with self._lock:
             equity = self._compute_equity()
             positions = {}
             for sym, pos in self._portfolio.positions.items():
+                if symbol and sym != symbol.upper():
+                    continue
                 current_price = self._latest_prices.get(sym, pos.avg_entry_price)
                 positions[sym] = {
                     "quantity": pos.quantity,
@@ -207,17 +219,21 @@ class PostTradeState:
                 "num_fills": self._total_fills,
             }
 
-    def get_tca_summary(self) -> dict:
+    def get_tca_summary(self, symbol: str | None = None) -> dict:
         """Tab 2: Transaction cost analysis."""
         with self._lock:
-            if not self._tca_results:
+            results = self._tca_results
+            if symbol:
+                results = [t for t in results if t.symbol == symbol.upper()]
+
+            if not results:
                 return {"fills": [], "averages": {}}
 
-            avg_spread = sum(t.spread_cost_bps for t in self._tca_results) / len(self._tca_results)
-            avg_slippage = sum(t.slippage_bps for t in self._tca_results) / len(self._tca_results)
-            avg_impact = sum(t.market_impact_bps for t in self._tca_results) / len(self._tca_results)
-            avg_fee = sum(t.fee_bps for t in self._tca_results) / len(self._tca_results)
-            avg_total = sum(t.total_cost_bps for t in self._tca_results) / len(self._tca_results)
+            avg_spread = sum(t.spread_cost_bps for t in results) / len(results)
+            avg_slippage = sum(t.slippage_bps for t in results) / len(results)
+            avg_impact = sum(t.market_impact_bps for t in results) / len(results)
+            avg_fee = sum(t.fee_bps for t in results) / len(results)
+            avg_total = sum(t.total_cost_bps for t in results) / len(results)
 
             fills = [
                 {
@@ -230,7 +246,7 @@ class PostTradeState:
                     "fee_bps": round(t.fee_bps, 2),
                     "total_cost_bps": round(t.total_cost_bps, 2),
                 }
-                for t in self._tca_results[-100:]  # last 100
+                for t in results[-100:]  # last 100
             ]
 
             return {
@@ -242,7 +258,7 @@ class PostTradeState:
                     "fee_bps": round(avg_fee, 2),
                     "total_cost_bps": round(avg_total, 2),
                 },
-                "num_fills": len(self._tca_results),
+                "num_fills": len(results),
             }
 
     def get_risk_metrics(self) -> dict:
@@ -313,15 +329,19 @@ class PostTradeState:
                 "peak_equity": round(self._peak_equity, 2),
             }
 
-    def get_alpha_decay(self) -> dict:
+    def get_alpha_decay(self, symbol: str | None = None) -> dict:
         """Tab 3: Alpha decay / IC analysis."""
         with self._lock:
-            return self._alpha_decay.get_alpha_decay_data()
+            return self._alpha_decay.get_alpha_decay_data(symbol=symbol)
 
-    def get_fill_analysis(self) -> dict:
+    def get_fill_analysis(self, symbol: str | None = None) -> dict:
         """Tab 6: Fill rate and order lifecycle."""
         with self._lock:
-            if not self._fills:
+            filtered = self._fills
+            if symbol:
+                filtered = [f for f in filtered if f.symbol == symbol.upper()]
+
+            if not filtered:
                 return {"fills": [], "summary": {}}
 
             fills = [
@@ -336,20 +356,20 @@ class PostTradeState:
                     "slippage_bps": round(f.slippage_bps, 2),
                     "strategy_id": f.strategy_id,
                 }
-                for f in self._fills[-100:]
+                for f in filtered[-100:]
             ]
 
-            buy_fills = [f for f in self._fills if f.side == "BUY"]
-            sell_fills = [f for f in self._fills if f.side == "SELL"]
+            buy_fills = [f for f in filtered if f.side == "BUY"]
+            sell_fills = [f for f in filtered if f.side == "SELL"]
 
             return {
                 "fills": fills,
                 "summary": {
-                    "total_fills": self._total_fills,
+                    "total_fills": len(filtered),
                     "buy_fills": len(buy_fills),
                     "sell_fills": len(sell_fills),
-                    "avg_slippage_bps": round(sum(f.slippage_bps for f in self._fills) / len(self._fills), 2)
-                    if self._fills
+                    "avg_slippage_bps": round(sum(f.slippage_bps for f in filtered) / len(filtered), 2)
+                    if filtered
                     else 0.0,
                     "total_fees": round(self._portfolio.total_fees, 4),
                 },

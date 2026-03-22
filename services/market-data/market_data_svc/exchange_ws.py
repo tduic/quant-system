@@ -34,8 +34,10 @@ STALE_TIMEOUT_S = 30.0
 SYMBOL_MAP = {
     "btcusdt": "BTC-USD",
     "ethusdt": "ETH-USD",
+    "solusdt": "SOL-USD",
     "btcusd": "BTC-USD",
     "ethusd": "ETH-USD",
+    "solusd": "SOL-USD",
 }
 
 

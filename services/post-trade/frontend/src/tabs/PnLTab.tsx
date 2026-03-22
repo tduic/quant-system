@@ -3,8 +3,11 @@ import { Card } from '../components/Card';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { usePolling } from '../hooks/usePolling';
 
-export function PnLTab() {
-  const { data, loading, error } = usePolling(api.getPnL, 5000);
+import { useCallback } from 'react';
+
+export function PnLTab({ symbol }: { symbol?: string }) {
+  const fetcher = useCallback(() => api.getPnL(symbol), [symbol]);
+  const { data, loading, error } = usePolling(fetcher, 5000);
 
   if (loading) return <LoadingSpinner />;
   if (error) return <div className="text-red-400 p-4">Error: {error}</div>;

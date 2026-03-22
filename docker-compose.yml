@@ -95,7 +95,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://redis:6379/0
       EXCHANGE_WS_URL: "wss://ws-feed.exchange.coinbase.com"
-      SYMBOLS: "btcusd"
+      SYMBOLS: "btcusd,ethusd,solusd"
       LOG_LEVEL: INFO
     restart: unless-stopped
 
@@ -134,7 +134,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://redis:6379/0
-      SYMBOLS: "btcusd"
+      SYMBOLS: "btcusd,ethusd,solusd"
       LOG_LEVEL: INFO
     restart: unless-stopped
 

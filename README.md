@@ -69,7 +69,7 @@ Coinbase WebSocket
 ## Services
 
 ### Market Data Service
-Connects to Coinbase WebSocket, normalizes BTC-USD trade and L2 order book data, publishes to Kafka. Handles reconnection with exponential backoff.
+Connects to Coinbase WebSocket, normalizes trade and L2 order book data for multiple symbols (BTC-USD, ETH-USD, SOL-USD), publishes to Kafka. Handles reconnection with exponential backoff.
 
 ### Storage Service
 Consumes from Kafka, batch-writes to TimescaleDB using the COPY protocol. TimescaleDB auto-generates 1-minute, 1-hour, and 1-day OHLCV candles via continuous aggregates. Compression kicks in after 7 days, retention drops raw data after 90 days.
@@ -78,17 +78,19 @@ Consumes from Kafka, batch-writes to TimescaleDB using the COPY protocol. Timesc
 Consumes trades and depth updates, maintains per-symbol order books and a rolling feature engine (VWAP, volatility, trade imbalance, trade rate). Routes market data to pluggable strategies.
 
 **Strategies:**
-- **Mean Reversion** — Trades when price deviates from VWAP by a configurable z-score threshold. Includes warmup, cooldown, and duplicate suppression.
+- **Mean Reversion** — Trades when price deviates from VWAP by a configurable z-score threshold. Includes warmup, cooldown, and duplicate suppression. One instance per symbol.
 - **Linear Regression** — Rolling OLS fair value model. Regresses price against 4 features, trades the residual when it exceeds the threshold. Hand-rolled Gaussian elimination solver (no numpy).
+- **Pairs Trading** — Mean-reversion on the log price ratio between two correlated assets. Uses a CrossAssetTracker for rolling correlation, relative strength, and spread z-score. Emits matched leg signals for both sides of the pair. Auto-registered for all C(n,2) symbol pairs.
 
 ### Risk Gateway
 Consumes signals, runs composable risk checks, publishes approved orders or rejections.
 
 **Risk Checks:**
-- Position size limit
+- Position size limit (per symbol)
 - Order notional limit
 - Max drawdown threshold
 - Parametric VaR (GBM-based, configurable confidence/horizon)
+- Total portfolio exposure (sum of abs notional across all symbols)
 
 ### Execution Service
 Consumes approved orders, simulates fills for paper trading, publishes fill events.
@@ -102,16 +104,19 @@ Consumes approved orders, simulates fills for paper trading, publishes fill even
 Consumes fills and trade data from Kafka, computes real-time analytics, and serves a FastAPI dashboard on port 8080.
 
 **Dashboard Endpoints:**
-- `GET /api/pnl` — PnL attribution (per symbol, realized + unrealized)
-- `GET /api/tca` — Transaction cost analysis (per-fill breakdown + averages)
-- `GET /api/alpha-decay` — IC decay curves at 5 horizons (1m, 5m, 15m, 30m, 1h), per-strategy breakdown
+- `GET /api/symbols` — Active symbols with positions or fills
+- `GET /api/pnl[?symbol=X]` — PnL attribution (per symbol, realized + unrealized)
+- `GET /api/tca[?symbol=X]` — Transaction cost analysis (per-fill breakdown + averages)
+- `GET /api/alpha-decay[?symbol=X]` — IC decay curves at 5 horizons (1m, 5m, 15m, 30m, 1h), per-strategy breakdown
 - `GET /api/risk-metrics` — Sharpe, Sortino, Calmar, drawdown, win rate, profit factor
 - `GET /api/drawdown` — Equity curve + running drawdown curve
-- `GET /api/fills` — Fill details + summary stats
+- `GET /api/fills[?symbol=X]` — Fill details + summary stats
 - `GET /api/export/excel` — Download formatted .xlsx report (5 sheets)
 
+All filterable endpoints accept an optional `?symbol=` query parameter for per-symbol views.
+
 ### Dashboard Frontend
-React 19 + TypeScript SPA served via nginx on port 3000 (Docker) or Vite dev server. Features 6 tabs matching the FastAPI endpoints, auto-refreshing data every 5 seconds, equity/drawdown charts with recharts, and an Excel download button. In Docker, nginx reverse-proxies `/api/` to the post-trade FastAPI backend.
+React 19 + TypeScript SPA served via nginx on port 3000 (Docker) or Vite dev server. Features 6 tabs matching the FastAPI endpoints, auto-refreshing data every 5 seconds, equity/drawdown charts with recharts, a symbol selector dropdown for filtering across tabs, and an Excel download button. In Docker, nginx reverse-proxies `/api/` to the post-trade FastAPI backend.
 
 ### Backtest Service
 Replays historical tick data from TimescaleDB through the same Kafka pipeline with a `backtest_id` header. All downstream services process backtest data identically to live — no `if backtest:` branches. Three replay modes: as_fast_as_possible, real_time, and scaled (Nx speed).
@@ -283,7 +288,8 @@ quant-system/
 │   │   └── storage_svc/
 │   ├── alpha-engine/            # Strategies, order book, feature engine
 │   │   └── alpha_engine_svc/
-│   │       └── strategies/      #   mean_reversion.py, linear_regression.py
+│   │       ├── cross_asset.py   #   CrossAssetTracker (correlation, relative strength, spread z)
+│   │       └── strategies/      #   mean_reversion.py, linear_regression.py, pairs_trading.py
 │   ├── risk-gateway/            # Risk checks, VaR model
 │   │   └── risk_gateway_svc/
 │   ├── execution/               # Fill simulator (spread, walk-book, Brownian bridge)

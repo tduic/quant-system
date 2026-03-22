@@ -8,7 +8,7 @@ function fmt(v: number | string, decimals = 2): string {
   return v.toFixed(decimals);
 }
 
-export function RiskMetricsTab() {
+export function RiskMetricsTab({ symbol: _symbol }: { symbol?: string }) {
   const { data, loading, error } = usePolling(api.getRiskMetrics, 5000);
 
   if (loading) return <LoadingSpinner />;

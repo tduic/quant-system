@@ -79,6 +79,134 @@ class TestTCAEndpoint:
         assert data["num_fills"] == 1
 
 
+class TestSymbolsEndpoint:
+    def test_empty_symbols(self, client: TestClient):
+        resp = client.get("/api/symbols")
+        assert resp.status_code == 200
+        assert resp.json()["symbols"] == []
+
+    def test_symbols_after_fills(self, client: TestClient, state: PostTradeState):
+        state.process_fill(
+            FillRecord(
+                fill_id="f1",
+                symbol="BTCUSD",
+                side="BUY",
+                quantity=0.001,
+                fill_price=80000,
+                fee=0.1,
+                timestamp=1000,
+                strategy_id="test",
+            )
+        )
+        state.process_fill(
+            FillRecord(
+                fill_id="f2",
+                symbol="ETHUSD",
+                side="BUY",
+                quantity=0.01,
+                fill_price=3000,
+                fee=0.1,
+                timestamp=2000,
+                strategy_id="test",
+            )
+        )
+        resp = client.get("/api/symbols")
+        data = resp.json()
+        assert "BTCUSD" in data["symbols"]
+        assert "ETHUSD" in data["symbols"]
+
+
+class TestSymbolFiltering:
+    def test_pnl_filter_by_symbol(self, client: TestClient, state: PostTradeState):
+        state.process_fill(
+            FillRecord(
+                fill_id="f1",
+                symbol="BTCUSD",
+                side="BUY",
+                quantity=0.001,
+                fill_price=80000,
+                fee=0.1,
+                timestamp=1000,
+                strategy_id="test",
+            )
+        )
+        state.process_fill(
+            FillRecord(
+                fill_id="f2",
+                symbol="ETHUSD",
+                side="BUY",
+                quantity=0.01,
+                fill_price=3000,
+                fee=0.1,
+                timestamp=2000,
+                strategy_id="test",
+            )
+        )
+        resp = client.get("/api/pnl?symbol=BTCUSD")
+        data = resp.json()
+        assert "BTCUSD" in data["positions"]
+        assert "ETHUSD" not in data["positions"]
+
+    def test_fills_filter_by_symbol(self, client: TestClient, state: PostTradeState):
+        state.process_fill(
+            FillRecord(
+                fill_id="f1",
+                symbol="BTCUSD",
+                side="BUY",
+                quantity=0.001,
+                fill_price=80000,
+                fee=0.1,
+                timestamp=1000,
+                strategy_id="test",
+            )
+        )
+        state.process_fill(
+            FillRecord(
+                fill_id="f2",
+                symbol="ETHUSD",
+                side="BUY",
+                quantity=0.01,
+                fill_price=3000,
+                fee=0.1,
+                timestamp=2000,
+                strategy_id="test",
+            )
+        )
+        resp = client.get("/api/fills?symbol=ETHUSD")
+        data = resp.json()
+        assert all(f["symbol"] == "ETHUSD" for f in data["fills"])
+        assert data["summary"]["total_fills"] == 1
+
+    def test_no_filter_returns_all(self, client: TestClient, state: PostTradeState):
+        state.process_fill(
+            FillRecord(
+                fill_id="f1",
+                symbol="BTCUSD",
+                side="BUY",
+                quantity=0.001,
+                fill_price=80000,
+                fee=0.1,
+                timestamp=1000,
+                strategy_id="test",
+            )
+        )
+        state.process_fill(
+            FillRecord(
+                fill_id="f2",
+                symbol="ETHUSD",
+                side="BUY",
+                quantity=0.01,
+                fill_price=3000,
+                fee=0.1,
+                timestamp=2000,
+                strategy_id="test",
+            )
+        )
+        resp = client.get("/api/fills")
+        data = resp.json()
+        assert len(data["fills"]) == 2
+
+
 class TestAlphaDecayEndpoint:
     def test_returns_empty_decay_data(self, client: TestClient):
         resp = client.get("/api/alpha-decay")
