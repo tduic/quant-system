@@ -32,7 +32,7 @@
 - [x] FastAPI dashboard with 6 tabs:
   - [x] PnL attribution (per symbol, realized + unrealized)
   - [x] Transaction cost analysis (spread, slippage, market impact, fee decomposition)
-  - [ ] Alpha decay curves (placeholder — requires Phase 5 backtesting for IC tracking)
+  - [x] Alpha decay curves (implemented in Phase 8)
   - [x] Risk metrics (Sharpe, Sortino, Calmar, drawdown, win rate, profit factor)
   - [x] Drawdown analysis (equity curve + running drawdown)
   - [x] Fill rate and order lifecycle
@@ -109,7 +109,24 @@
 - [x] Backtest comparison view: side-by-side metrics, pairwise deltas, ranking by Sharpe/return
 - [x] Slippage/fee sensitivity sweeps: breakeven analysis, dSharpe/dCost sensitivities
 - [x] Out-of-sample validation reporting: composite grade (STRONG/MODERATE/WEAK/FAIL), flagging system
-- [x] 37 new Monte Carlo tests, 10 sensitivity sweep tests, 14 walk-forward tests, 14 param sensitivity tests, 12 comparison tests, 20 validation tests
+- [x] Strategy evaluator with inline mean-reversion and pairs trading logic (no external deps)
+- [x] CLI analysis commands: sensitivity, walk-forward, monte-carlo, cost-sweep, validate
+- [x] Evaluator bug fix: `num_signals` was hardcoded to 0 in early-return path
+- [x] 27 evaluator tests, 15 CLI analysis tests, 37 Monte Carlo tests, 10 sensitivity sweep tests, 14 walk-forward tests, 14 param sensitivity tests, 12 comparison tests, 20 validation tests
+
+### Phase 10.5 — Analysis Dashboard & Build Tooling
+- [x] Async analysis job runner (`analysis_jobs.py`): ThreadPoolExecutor with in-memory JobStore, progress tracking (0-100%)
+- [x] 4 new FastAPI endpoints: submit, status, result, list jobs
+- [x] Cross-service import: post-trade Dockerfile copies backtest_svc for analysis modules, sys.path resolution for local + Docker
+- [x] Pairs trading synthetic data generator: correlated dual-symbol price series for dashboard analysis
+- [x] Analysis dashboard tab (React): config bar, 5 analysis buttons, live progress bar, rich result renderers per analysis type
+- [x] Job history table: click any completed job to view its results, blue highlight for active selection
+- [x] 13 new analysis job tests (8 JobStore + 5 dashboard endpoint)
+- [x] `.dockerignore` added: excludes venv, node_modules, .git, tests, build artifacts for faster Docker builds
+- [x] Makefile: `make up` (cached) / `make up-build` (rebuild) split
+- [x] Makefile: `make test`, `make lint`, `make lint-fix`, `make format` now include frontend (tsc, eslint, prettier)
+- [x] ESLint 9 flat config (`eslint.config.js`) with typescript-eslint + react-hooks, `_` prefix ignore rule
+- [x] All `npx` calls replaced with direct `./node_modules/.bin/` paths for faster execution
 
 ## Up Next
 

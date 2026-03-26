@@ -434,6 +434,7 @@ function ResultDisplay({
 export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
   const [jobs, setJobs] = useState<AnalysisJobSummary[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [viewingJobId, setViewingJobId] = useState<string | null>(null);
   const [activeResult, setActiveResult] = useState<AnalysisJobResult | null>(
     null,
   );
@@ -475,6 +476,7 @@ export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
         if (status.status === "completed") {
           const res = await api.getJobResult(activeJobId);
           setActiveResult(res);
+          setViewingJobId(activeJobId);
           setActiveJobId(null);
         } else if (status.status === "failed") {
           setActiveJobId(null);
@@ -493,6 +495,7 @@ export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
   const handleSubmit = async (analysisType: AnalysisType) => {
     setSubmitting(true);
     setActiveResult(null);
+    setViewingJobId(null);
     try {
       const res = await api.submitAnalysis(analysisType, {
         strategy,
@@ -512,6 +515,7 @@ export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
     try {
       const res = await api.getJobResult(jobId);
       setActiveResult(res);
+      setViewingJobId(jobId);
     } catch {
       /* silent */
     }
@@ -609,41 +613,50 @@ export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
                 </tr>
               </thead>
               <tbody>
-                {jobs.map((j) => (
-                  <tr
-                    key={j.job_id}
-                    className="border-t border-gray-800 hover:bg-gray-800/50"
-                  >
-                    <td className="py-2 px-3 text-gray-200">
-                      {ANALYSES.find((a) => a.type === j.analysis_type)
-                        ?.label ?? j.analysis_type}
-                    </td>
-                    <td className="py-2 px-3">
-                      <StatusBadge status={j.status} />
-                    </td>
-                    <td className="py-2 px-3 w-32">
-                      <ProgressBar progress={j.progress} />
-                    </td>
-                    <td className="py-2 px-3">
-                      {j.status === "completed" && (
-                        <button
-                          onClick={() => handleViewResult(j.job_id)}
-                          className="text-xs text-blue-400 hover:text-blue-300"
-                        >
-                          View
-                        </button>
-                      )}
-                      {j.status === "failed" && (
-                        <span
-                          className="text-xs text-red-400"
-                          title={j.error ?? ""}
-                        >
-                          Failed
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {jobs.map((j) => {
+                  const isViewing = viewingJobId === j.job_id;
+                  return (
+                    <tr
+                      key={j.job_id}
+                      className={`border-t border-gray-800 cursor-pointer transition-colors ${isViewing ? "bg-blue-900/30 border-l-2 border-l-blue-500" : "hover:bg-gray-800/50"}`}
+                      onClick={() =>
+                        j.status === "completed" && handleViewResult(j.job_id)
+                      }
+                    >
+                      <td className="py-2 px-3 text-gray-200">
+                        {ANALYSES.find((a) => a.type === j.analysis_type)
+                          ?.label ?? j.analysis_type}
+                      </td>
+                      <td className="py-2 px-3">
+                        <StatusBadge status={j.status} />
+                      </td>
+                      <td className="py-2 px-3 w-32">
+                        <ProgressBar progress={j.progress} />
+                      </td>
+                      <td className="py-2 px-3">
+                        {j.status === "completed" && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewResult(j.job_id);
+                            }}
+                            className={`text-xs px-2 py-0.5 rounded ${isViewing ? "bg-blue-600 text-white" : "text-blue-400 hover:text-blue-300 hover:bg-gray-700"}`}
+                          >
+                            {isViewing ? "Viewing" : "View"}
+                          </button>
+                        )}
+                        {j.status === "failed" && (
+                          <span
+                            className="text-xs text-red-400"
+                            title={j.error ?? ""}
+                          >
+                            Failed
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -117,15 +117,55 @@ class JobStore:
 # the post-trade service startable without the backtest package installed.
 
 
-def _make_trades(params: dict[str, Any]) -> list[dict]:
-    """Generate synthetic trade data for analysis."""
+def _make_trades(params: dict[str, Any], *, strategy: str = "mean_reversion") -> list[dict]:
+    """Generate synthetic trade data for analysis.
+
+    For pairs trading, generates interleaved trades for two correlated symbols.
+    """
     import random
 
-    symbol = params.get("symbol", "BTCUSD")
+    symbol_a = params.get("symbol", "BTCUSD")
+    symbol_b = params.get("symbol_b", "ETHUSD")
     n = int(params.get("num_trades", 1000))
     seed = params.get("seed", 42)
 
     rng = random.Random(seed)
+
+    if strategy == "pairs_trading":
+        # Generate two correlated price series
+        price_a = 50000.0
+        price_b = 3500.0
+        trades = []
+        for i in range(n):
+            # Correlated random walk — shared shock + independent noise
+            shared = rng.gauss(0, 30)
+            price_a += shared + rng.gauss(0, 20) - (price_a - 50000) * 0.001
+            price_b += shared * 0.07 + rng.gauss(0, 1.5) - (price_b - 3500) * 0.001
+            price_a = max(price_a, 100)
+            price_b = max(price_b, 10)
+            ts = 1_000_000 + i * 1000
+            # Interleave trades for both symbols
+            trades.append(
+                {
+                    "symbol": symbol_a,
+                    "price": round(price_a, 2),
+                    "quantity": round(rng.uniform(0.001, 0.1), 4),
+                    "timestamp_exchange": ts,
+                    "is_buyer_maker": rng.random() > 0.5,
+                }
+            )
+            trades.append(
+                {
+                    "symbol": symbol_b,
+                    "price": round(price_b, 2),
+                    "quantity": round(rng.uniform(0.01, 1.0), 4),
+                    "timestamp_exchange": ts + 500,
+                    "is_buyer_maker": rng.random() > 0.5,
+                }
+            )
+        return trades
+
+    # Single-symbol strategies (mean_reversion, etc.)
     price = 50000.0
     trades = []
     for i in range(n):
@@ -133,7 +173,7 @@ def _make_trades(params: dict[str, Any]) -> list[dict]:
         price = max(price, 100)
         trades.append(
             {
-                "symbol": symbol,
+                "symbol": symbol_a,
                 "price": round(price, 2),
                 "quantity": round(rng.uniform(0.001, 0.1), 4),
                 "timestamp_exchange": 1_000_000 + i * 1000,
@@ -171,7 +211,7 @@ def _execute_analysis(
 
     strategy = params.get("strategy", "mean_reversion")
     symbol = params.get("symbol", "BTCUSD")
-    trades = _make_trades(params)
+    trades = _make_trades(params, strategy=strategy)
 
     config = EvaluatorConfig(
         strategy_type=strategy,
