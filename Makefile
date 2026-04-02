@@ -1,4 +1,4 @@
-.PHONY: help up up-build down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-cpp test-watch lint lint-fix format backtest backtest-list backtest-results cpp-build cpp-install cpp-test cpp-benchmark cpp-clean fe-install fe-dev fe-build fe-lint
+.PHONY: help up up-build down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-cpp test-watch lint lint-fix format backtest backtest-list backtest-results cpp-build cpp-install cpp-test cpp-benchmark cpp-clean fe-install fe-dev fe-build fe-lint validate validate-continuous validate-long
 
 # Default target
 help: ## Show this help
@@ -255,3 +255,16 @@ clean: ## Stop services and remove volumes (WARNING: deletes all data)
 
 clean-images: ## Remove built images
 	docker compose down --rmi local
+
+# ---------------------------------------------------------------------------
+# Validation & Monitoring
+# ---------------------------------------------------------------------------
+
+validate: ## Run paper trading validation checks (single pass)
+	python scripts/paper_trading_validator.py --once
+
+validate-continuous: ## Run paper trading validation for 5 minutes
+	python scripts/paper_trading_validator.py --duration-minutes 5 --output validation-report.json
+
+validate-long: ## Run paper trading validation for 1 hour
+	python scripts/paper_trading_validator.py --duration-minutes 60 --interval 60 --output validation-report.json

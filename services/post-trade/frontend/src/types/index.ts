@@ -128,7 +128,19 @@ export type AnalysisType =
   | "walk_forward"
   | "monte_carlo"
   | "cost_sweep"
-  | "validate";
+  | "validate"
+  | "run_all";
+
+export type DataSource = "generated" | "historical";
+
+export interface BacktestRun {
+  backtest_id: string;
+  symbol: string;
+  timestamp: string;
+  trades_replayed: number;
+  duration_seconds: number;
+  has_trades: boolean;
+}
 
 export interface AnalysisJobSummary {
   job_id: string;

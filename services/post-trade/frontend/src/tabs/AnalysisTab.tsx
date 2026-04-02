@@ -6,6 +6,8 @@ import type {
   AnalysisType,
   AnalysisJobSummary,
   AnalysisJobResult,
+  DataSource,
+  BacktestRun,
 } from "../types";
 
 interface AnalysisOption {
@@ -43,6 +45,12 @@ const ANALYSES: AnalysisOption[] = [
     label: "Full Validation",
     description:
       "Combined walk-forward + Monte Carlo + cost sweep with graded report",
+  },
+  {
+    type: "run_all",
+    label: "Run All",
+    description:
+      "Run every analysis (sensitivity, walk-forward, Monte Carlo, cost sweep, validation) in one job",
   },
 ];
 
@@ -400,6 +408,32 @@ function ValidateResult({ result }: { result: Record<string, unknown> }) {
   );
 }
 
+function RunAllResult({ result }: { result: Record<string, unknown> }) {
+  const sections: { key: string; label: string; type: string }[] = [
+    { key: "sensitivity", label: "Param Sensitivity", type: "sensitivity" },
+    { key: "walk_forward", label: "Walk-Forward", type: "walk_forward" },
+    { key: "monte_carlo", label: "Monte Carlo", type: "monte_carlo" },
+    { key: "cost_sweep", label: "Cost Sweep", type: "cost_sweep" },
+    { key: "validate", label: "Full Validation", type: "validate" },
+  ];
+  return (
+    <div className="space-y-6">
+      {sections.map((s) => {
+        const data = result[s.key] as Record<string, unknown> | undefined;
+        if (!data) return null;
+        return (
+          <div key={s.key}>
+            <h4 className="text-xs text-gray-400 uppercase tracking-wide mb-3 border-b border-gray-800 pb-1">
+              {s.label}
+            </h4>
+            <ResultDisplay analysisType={s.type} result={data} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ResultDisplay({
   analysisType,
   result,
@@ -418,6 +452,8 @@ function ResultDisplay({
       return <CostSweepResult result={result} />;
     case "validate":
       return <ValidateResult result={result} />;
+    case "run_all":
+      return <RunAllResult result={result} />;
     default:
       return (
         <pre className="text-sm text-gray-300 font-mono">
@@ -441,6 +477,9 @@ export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [strategy, setStrategy] = useState("mean_reversion");
   const [numTrades, setNumTrades] = useState(1000);
+  const [dataSource, setDataSource] = useState<DataSource>("generated");
+  const [backtests, setBacktests] = useState<BacktestRun[]>([]);
+  const [selectedBacktest, setSelectedBacktest] = useState<string>("");
 
   // Poll job list
   const refreshJobs = useCallback(async () => {
@@ -457,6 +496,15 @@ export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
     const id = setInterval(refreshJobs, 3000);
     return () => clearInterval(id);
   }, [refreshJobs]);
+
+  // Fetch available historical backtest runs
+  useEffect(() => {
+    if (dataSource !== "historical") return;
+    api
+      .listBacktests()
+      .then((data) => setBacktests(data.backtests))
+      .catch(() => setBacktests([]));
+  }, [dataSource]);
 
   // Poll active job status
   useEffect(() => {
@@ -497,11 +545,17 @@ export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
     setActiveResult(null);
     setViewingJobId(null);
     try {
-      const res = await api.submitAnalysis(analysisType, {
+      const params: Record<string, unknown> = {
         strategy,
-        num_trades: numTrades,
         symbol: "BTCUSD",
-      });
+        data_source: dataSource,
+      };
+      if (dataSource === "historical") {
+        params.backtest_id = selectedBacktest;
+      } else {
+        params.num_trades = numTrades;
+      }
+      const res = await api.submitAnalysis(analysisType, params);
       setActiveJobId(res.job_id);
       refreshJobs();
     } catch (e) {
@@ -526,6 +580,33 @@ export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
       {/* Config bar */}
       <div className="flex flex-wrap items-center gap-4 bg-gray-900 rounded-lg p-4 border border-gray-800">
         <div>
+          <label className="text-xs text-gray-400 block mb-1">
+            Data Source
+          </label>
+          <div className="flex rounded-md overflow-hidden border border-gray-700">
+            <button
+              onClick={() => setDataSource("generated")}
+              className={`px-3 py-1.5 text-sm transition-colors ${
+                dataSource === "generated"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-800 text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              Generated
+            </button>
+            <button
+              onClick={() => setDataSource("historical")}
+              className={`px-3 py-1.5 text-sm transition-colors ${
+                dataSource === "historical"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-800 text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              Historical
+            </button>
+          </div>
+        </div>
+        <div>
           <label className="text-xs text-gray-400 block mb-1">Strategy</label>
           <select
             value={strategy}
@@ -536,27 +617,58 @@ export function AnalysisTab({ symbol: _symbol }: { symbol?: string }) {
             <option value="pairs_trading">Pairs Trading</option>
           </select>
         </div>
-        <div>
-          <label className="text-xs text-gray-400 block mb-1">Trades</label>
-          <input
-            type="number"
-            value={numTrades}
-            onChange={(e) => setNumTrades(Number(e.target.value))}
-            min={100}
-            max={10000}
-            step={100}
-            className="w-24 px-2 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-200 focus:outline-none focus:border-blue-500"
-          />
-        </div>
+        {dataSource === "generated" ? (
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">Trades</label>
+            <input
+              type="number"
+              value={numTrades}
+              onChange={(e) => setNumTrades(Number(e.target.value))}
+              min={100}
+              max={10000}
+              step={100}
+              className="w-24 px-2 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-200 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+        ) : (
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-xs text-gray-400 block mb-1">
+              Backtest Run
+            </label>
+            {backtests.length > 0 ? (
+              <select
+                value={selectedBacktest}
+                onChange={(e) => setSelectedBacktest(e.target.value)}
+                className="w-full px-2 py-1.5 text-sm bg-gray-800 border border-gray-700 rounded-md text-gray-200 focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Select a backtest run...</option>
+                {backtests.map((bt) => (
+                  <option key={bt.backtest_id} value={bt.backtest_id}>
+                    {bt.backtest_id} — {bt.symbol} ({bt.trades_replayed} trades)
+                    {bt.has_trades ? "" : " [no trade data]"}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="text-sm text-gray-500 py-1.5">
+                No historical backtests found
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Analysis buttons */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {ANALYSES.map((a) => (
           <button
             key={a.type}
             onClick={() => handleSubmit(a.type)}
-            disabled={submitting || !!activeJobId}
+            disabled={
+              submitting ||
+              !!activeJobId ||
+              (dataSource === "historical" && !selectedBacktest)
+            }
             className="bg-gray-900 hover:bg-gray-800 border border-gray-700 hover:border-blue-600 rounded-lg p-4 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <div className="text-sm font-semibold text-blue-400 mb-1">

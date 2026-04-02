@@ -137,6 +137,74 @@ CREATE INDEX IF NOT EXISTS idx_fills_backtest
     WHERE backtest_id IS NOT NULL;
 
 -- ==========================================================================
+-- Order status history (append-only audit trail)
+-- ==========================================================================
+
+CREATE TABLE IF NOT EXISTS order_status_history (
+    time                TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    order_id            UUID            NOT NULL,
+    exchange_order_id   VARCHAR(100),
+    status              VARCHAR(20)     NOT NULL,
+    filled_quantity     DECIMAL(18,8)   DEFAULT 0,
+    remaining_quantity  DECIMAL(18,8)   DEFAULT 0,
+    avg_fill_price      DECIMAL(18,8)   DEFAULT 0,
+    reason              TEXT,
+    backtest_id         UUID
+);
+
+SELECT create_hypertable('order_status_history', 'time',
+    chunk_time_interval => INTERVAL '7 days',
+    if_not_exists => TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_osh_order
+    ON order_status_history (order_id, time DESC);
+
+-- ==========================================================================
+-- Audit log (immutable, append-only)
+-- ==========================================================================
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    time                TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    service             VARCHAR(50)     NOT NULL,
+    event               VARCHAR(100)    NOT NULL,
+    detail              JSONB           NOT NULL DEFAULT '{}',
+    order_id            UUID,
+    fill_id             UUID,
+    symbol              VARCHAR(20),
+    backtest_id         UUID
+);
+
+SELECT create_hypertable('audit_log', 'time',
+    chunk_time_interval => INTERVAL '7 days',
+    if_not_exists => TRUE
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_service_time
+    ON audit_log (service, time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_audit_order
+    ON audit_log (order_id, time DESC)
+    WHERE order_id IS NOT NULL;
+
+-- ==========================================================================
+-- Position reconciliation history
+-- ==========================================================================
+
+CREATE TABLE IF NOT EXISTS reconciliation_history (
+    time                TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+    symbols_checked     INTEGER         NOT NULL DEFAULT 0,
+    discrepancy_count   INTEGER         NOT NULL DEFAULT 0,
+    status              VARCHAR(20)     NOT NULL DEFAULT 'ok',
+    report              JSONB           NOT NULL DEFAULT '{}'
+);
+
+SELECT create_hypertable('reconciliation_history', 'time',
+    chunk_time_interval => INTERVAL '30 days',
+    if_not_exists => TRUE
+);
+
+-- ==========================================================================
 -- Continuous Aggregates: OHLCV bars from raw trades
 -- ==========================================================================
 

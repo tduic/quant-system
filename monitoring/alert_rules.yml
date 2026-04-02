@@ -1,0 +1,89 @@
+groups:
+  - name: circuit_breaker
+    rules:
+      - alert: CircuitBreakerTripped
+        expr: max(circuit_breaker_active) == 1
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker is TRIPPED — all trading halted"
+          description: "The kill switch has been activated. No signals, orders, or fills are being processed."
+
+      - alert: CircuitBreakerTrippedExtended
+        expr: max(circuit_breaker_active) == 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Circuit breaker has been tripped for over 5 minutes"
+          description: "Trading has been halted for an extended period. Investigate and reset if appropriate."
+
+  - name: risk_breaches
+    rules:
+      - alert: DrawdownBreached
+        expr: portfolio_drawdown_pct{service="post-trade"} > 0.05
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Portfolio drawdown exceeds 5% limit"
+          description: "Current drawdown: {{ $value | humanizePercentage }}. Risk limit is 5%. Consider tripping the circuit breaker."
+
+      - alert: DrawdownWarning
+        expr: portfolio_drawdown_pct{service="post-trade"} > 0.03
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Portfolio drawdown approaching limit (>3%)"
+          description: "Current drawdown: {{ $value | humanizePercentage }}. Approaching the 5% risk limit."
+
+      - alert: HighRejectionRate
+        expr: sum(rate(orders_rejected[5m])) / (sum(rate(orders_approved[5m])) + sum(rate(orders_rejected[5m])) + 0.001) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Risk gateway rejecting >80% of signals"
+          description: "High rejection rate may indicate miscalibrated risk limits or adverse market conditions."
+
+  - name: service_health
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is DOWN"
+          description: "Prometheus cannot reach {{ $labels.job }}. The service may have crashed or is unresponsive."
+
+      - alert: NoMarketData
+        expr: rate(messages_published{type="match"}[5m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No market data received for 2+ minutes"
+          description: "The market data service has stopped publishing trade messages. WebSocket may be disconnected."
+
+      - alert: NoFills
+        expr: rate(fills_total[10m]) == 0 and sum(signals_emitted) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Signals are being emitted but no fills for 10+ minutes"
+          description: "The pipeline may be stuck between risk gateway and execution."
+
+  - name: execution_quality
+    rules:
+      - alert: HighSlippage
+        expr: (rate(fill_slippage_bps_sum[5m]) / rate(fill_slippage_bps_count[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Average slippage exceeds 10 bps for {{ $labels.symbol }}"
+          description: "Current avg slippage: {{ $value }} bps. Check market conditions or fill model calibration."

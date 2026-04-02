@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from post_trade_svc.analysis_jobs import JobStore
+from post_trade_svc.analysis_jobs import JobStore, _list_historical_backtests
 
 if TYPE_CHECKING:
     from post_trade_svc.state import PostTradeState
@@ -145,6 +145,11 @@ def create_app(state: PostTradeState) -> FastAPI:
             "status": job.status.value,
             "result": job.result,
         }
+
+    @app.get("/api/analysis/backtests")
+    def list_backtests():
+        """List historical backtest runs that have trade data available."""
+        return {"backtests": _list_historical_backtests()}
 
     @app.get("/api/analysis/jobs")
     def list_jobs(limit: int = Query(20)):

@@ -56,25 +56,59 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True)
+class CoinbaseConfig:
+    """Coinbase API credentials (for live trading)."""
+
+    api_key: str = ""
+    api_secret: str = ""
+
+    @classmethod
+    def from_env(cls) -> CoinbaseConfig:
+        return cls(
+            api_key=os.getenv("COINBASE_API_KEY", ""),
+            api_secret=os.getenv("COINBASE_API_SECRET", ""),
+        )
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.api_key and self.api_secret)
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Top-level application config combining all sub-configs."""
 
     kafka: KafkaConfig = field(default_factory=KafkaConfig.from_env)
     redis: RedisConfig = field(default_factory=RedisConfig.from_env)
     database: DatabaseConfig = field(default_factory=DatabaseConfig.from_env)
+    coinbase: CoinbaseConfig = field(default_factory=CoinbaseConfig.from_env)
     symbols: list[str] = field(default_factory=lambda: _parse_symbols())
     log_level: str = "INFO"
     backtest_id: str | None = None
+    trading_mode: str = "paper"  # "paper" or "live"
 
     @classmethod
     def from_env(cls) -> AppConfig:
+        trading_mode = os.getenv("TRADING_MODE", "paper")
+        coinbase = CoinbaseConfig.from_env()
+
+        # Fail fast: live trading requires API credentials
+        if trading_mode == "live" and not coinbase.is_configured:
+            msg = (
+                "TRADING_MODE=live requires COINBASE_API_KEY and "
+                "COINBASE_API_SECRET environment variables"
+            )
+            raise ValueError(msg)
+
         return cls(
             kafka=KafkaConfig.from_env(),
             redis=RedisConfig.from_env(),
             database=DatabaseConfig.from_env(),
+            coinbase=coinbase,
             symbols=_parse_symbols(),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             backtest_id=os.getenv("BACKTEST_ID"),
+            trading_mode=trading_mode,
         )
 
 

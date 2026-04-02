@@ -25,7 +25,10 @@ from quant_core.kafka_utils import (
     QProducer,
 )
 from quant_core.logging import setup_logging
+from quant_core.metrics import MetricsRegistry
 from quant_core.models import Fill, Signal, Trade, now_ms
+from quant_core.portfolio_state import sync_portfolio_to_redis
+from quant_core.redis_utils import create_sync_redis
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +41,16 @@ async def main() -> None:
     setup_logging(SERVICE_NAME, level=config.log_level)
     logger.info("Starting Post-Trade Analysis Service")
 
+    # --- Metrics ---
+    metrics = MetricsRegistry(SERVICE_NAME)
+    metrics.start_http_server(port=9090)
+
     # --- Shared state ---
     state = PostTradeState()
+    run_id = config.backtest_id or "live"
+
+    # --- Redis (for portfolio state sync) ---
+    redis_client = create_sync_redis(config.redis)
 
     # --- Kafka ---
     producer = QProducer(config.kafka, backtest_id=config.backtest_id)
@@ -130,6 +141,40 @@ async def main() -> None:
                 )
                 state.process_fill(record)
                 fill_count += 1
+                metrics.inc("fills_processed", labels={"symbol": fill.symbol})
+                metrics.set_gauge("portfolio_equity", state._peak_equity)  # Updated below with real value
+
+                # Sync portfolio state to Redis for the risk gateway
+                try:
+                    pnl_data = state.get_pnl_summary()
+                    positions_for_redis = {}
+                    for sym, pos in pnl_data.get("positions", {}).items():
+                        positions_for_redis[sym] = {
+                            "quantity": pos["quantity"],
+                            "avg_entry_price": pos["avg_entry_price"],
+                            "realized_pnl": pos["realized_pnl"],
+                            "unrealized_pnl": pos["unrealized_pnl"],
+                        }
+                    sync_portfolio_to_redis(
+                        r=redis_client,
+                        run_id=run_id,
+                        positions=positions_for_redis,
+                        current_equity=pnl_data["current_equity"],
+                        peak_equity=state._peak_equity,
+                        realized_pnl=pnl_data["total_realized_pnl"],
+                        unrealized_pnl=pnl_data["total_unrealized_pnl"],
+                        total_fees=pnl_data["total_fees"],
+                    )
+                    # Update portfolio metrics
+                    metrics.set_gauge("portfolio_equity", pnl_data["current_equity"])
+                    metrics.set_gauge("portfolio_peak_equity", state._peak_equity)
+                    metrics.set_gauge("portfolio_realized_pnl", pnl_data["total_realized_pnl"])
+                    metrics.set_gauge("portfolio_unrealized_pnl", pnl_data["total_unrealized_pnl"])
+                    metrics.set_gauge("portfolio_total_fees", pnl_data["total_fees"])
+                    drawdown = 1.0 - (pnl_data["current_equity"] / state._peak_equity) if state._peak_equity > 0 else 0.0
+                    metrics.set_gauge("portfolio_drawdown_pct", drawdown)
+                except Exception:
+                    logger.warning("Failed to sync portfolio state to Redis")
 
                 if fill_count % 10 == 0:
                     logger.info("Processed %d fills", fill_count)
@@ -157,6 +202,7 @@ async def main() -> None:
                     trade = Trade.from_json(value)
                     state.update_price(trade.symbol, trade.price, timestamp_ms=trade.timestamp)
                     trade_count += 1
+                    metrics.inc("trades_processed", labels={"symbol": trade.symbol})
                 except Exception:
                     pass
 

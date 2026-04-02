@@ -117,6 +117,100 @@ class JobStore:
 # the post-trade service startable without the backtest package installed.
 
 
+def _load_historical_trades(backtest_id: str) -> list[dict]:
+    """Load trades from a historical backtest run's trade file.
+
+    Searches .backtest_results/ for JSONL trade data associated with the
+    given backtest_id.
+    """
+    import json
+    import os
+
+    candidates = [
+        os.path.join(os.path.dirname(__file__), "..", "..", ".backtest_results"),
+        os.path.join(os.path.dirname(__file__), "..", ".backtest_results"),
+        ".backtest_results",
+    ]
+    for base in candidates:
+        base = os.path.abspath(base)
+        # Try trades file (JSONL)
+        trades_path = os.path.join(base, f"{backtest_id}_trades.jsonl")
+        if os.path.isfile(trades_path):
+            trades = []
+            with open(trades_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        trades.append(json.loads(line))
+            if trades:
+                logger.info("Loaded %d historical trades from %s", len(trades), trades_path)
+                return trades
+
+        # Try JSON array format
+        trades_json = os.path.join(base, f"{backtest_id}_trades.json")
+        if os.path.isfile(trades_json):
+            with open(trades_json) as f:
+                data = json.load(f)
+            trades = data if isinstance(data, list) else data.get("trades", [])
+            if trades:
+                logger.info("Loaded %d historical trades from %s", len(trades), trades_json)
+                return trades
+
+    msg = f"No trade data found for backtest {backtest_id}"
+    raise FileNotFoundError(msg)
+
+
+def _list_historical_backtests() -> list[dict[str, Any]]:
+    """List available backtest runs that have trade data files."""
+    import json
+    import os
+
+    candidates = [
+        os.path.join(os.path.dirname(__file__), "..", "..", ".backtest_results"),
+        os.path.join(os.path.dirname(__file__), "..", ".backtest_results"),
+        ".backtest_results",
+    ]
+    results = []
+    seen_ids: set[str] = set()
+
+    for base in candidates:
+        base = os.path.abspath(base)
+        if not os.path.isdir(base):
+            continue
+        for fname in os.listdir(base):
+            if not fname.endswith(".json"):
+                continue
+            # Skip trade data files — we want the metadata files
+            if "_trades." in fname:
+                continue
+            fpath = os.path.join(base, fname)
+            try:
+                with open(fpath) as f:
+                    data = json.load(f)
+                bid = data.get("backtest_id", fname.replace(".json", ""))
+                if bid in seen_ids:
+                    continue
+                seen_ids.add(bid)
+                # Check if trade data exists for this run
+                has_trades = any(
+                    os.path.isfile(os.path.join(base, f"{bid}{ext}"))
+                    for ext in ("_trades.jsonl", "_trades.json")
+                )
+                results.append({
+                    "backtest_id": bid,
+                    "symbol": data.get("symbol", "unknown"),
+                    "timestamp": data.get("timestamp", ""),
+                    "trades_replayed": data.get("trades_replayed", 0),
+                    "duration_seconds": data.get("duration_seconds", 0),
+                    "has_trades": has_trades,
+                })
+            except (json.JSONDecodeError, OSError):
+                continue
+
+    results.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
+    return results
+
+
 def _make_trades(params: dict[str, Any], *, strategy: str = "mean_reversion") -> list[dict]:
     """Generate synthetic trade data for analysis.
 
@@ -211,7 +305,19 @@ def _execute_analysis(
 
     strategy = params.get("strategy", "mean_reversion")
     symbol = params.get("symbol", "BTCUSD")
-    trades = _make_trades(params, strategy=strategy)
+
+    # Data source: "historical" loads from a previous backtest run,
+    # "generated" (default) creates synthetic data.
+    data_source = params.get("data_source", "generated")
+    if data_source == "historical":
+        backtest_id = params.get("backtest_id")
+        if not backtest_id:
+            msg = "backtest_id is required when data_source is 'historical'"
+            raise ValueError(msg)
+        trades = _load_historical_trades(backtest_id)
+        logger.info("Using %d historical trades from backtest %s", len(trades), backtest_id)
+    else:
+        trades = _make_trades(params, strategy=strategy)
 
     config = EvaluatorConfig(
         strategy_type=strategy,
@@ -231,6 +337,8 @@ def _execute_analysis(
         return _run_cost_sweep(evaluator, trades, params, store, job_id)
     if analysis_type == "validate":
         return _run_validate(evaluator, trades, params, store, job_id)
+    if analysis_type == "run_all":
+        return _run_all(evaluator, trades, params, store, job_id)
 
     msg = f"Unknown analysis type: {analysis_type}"
     raise ValueError(msg)
@@ -511,4 +619,38 @@ def _run_validate(
             }
             for f in report.flags
         ],
+    }
+
+
+def _run_all(
+    evaluator: Any,
+    trades: list[dict],
+    params: dict[str, Any],
+    store: JobStore,
+    job_id: str,
+) -> dict[str, Any]:
+    """Run all five analysis types and return combined results."""
+    store._update(job_id, progress=5)
+
+    sensitivity = _run_sensitivity(evaluator, trades, params, store, job_id)
+    store._update(job_id, progress=20)
+
+    walk_forward = _run_walk_forward(evaluator, trades, params, store, job_id)
+    store._update(job_id, progress=40)
+
+    monte_carlo = _run_monte_carlo(evaluator, trades, params, store, job_id)
+    store._update(job_id, progress=60)
+
+    cost_sweep = _run_cost_sweep(evaluator, trades, params, store, job_id)
+    store._update(job_id, progress=80)
+
+    validate = _run_validate(evaluator, trades, params, store, job_id)
+    store._update(job_id, progress=95)
+
+    return {
+        "sensitivity": sensitivity,
+        "walk_forward": walk_forward,
+        "monte_carlo": monte_carlo,
+        "cost_sweep": cost_sweep,
+        "validate": validate,
     }

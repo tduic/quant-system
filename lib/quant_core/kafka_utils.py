@@ -28,8 +28,10 @@ TOPIC_RAW_TRADES = "raw.trades"
 TOPIC_RAW_DEPTH = "raw.depth"
 TOPIC_SIGNALS = "signals"
 TOPIC_ORDERS = "orders"
+TOPIC_ORDER_STATUS = "order.status"
 TOPIC_FILLS = "fills"
 TOPIC_RISK_EVENTS = "risk.events"
+TOPIC_AUDIT = "audit.log"
 TOPIC_HEARTBEAT = "system.heartbeat"
 
 

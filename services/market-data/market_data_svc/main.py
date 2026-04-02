@@ -16,6 +16,7 @@ from market_data_svc.publisher import MarketDataPublisher
 from quant_core.config import AppConfig
 from quant_core.kafka_utils import TOPIC_HEARTBEAT, QProducer
 from quant_core.logging import setup_logging
+from quant_core.metrics import MetricsRegistry
 from quant_core.models import now_ms
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,10 @@ async def main() -> None:
         extra={"symbol": ",".join(config.symbols)},
     )
 
+    # --- Metrics ---
+    metrics = MetricsRegistry(SERVICE_NAME)
+    metrics.start_http_server(port=9090)
+
     # Set up Kafka producer
     producer = QProducer(config.kafka, backtest_id=config.backtest_id)
     publisher = MarketDataPublisher(producer)
@@ -41,6 +46,8 @@ async def main() -> None:
         event = normalize_message(raw)
         if event is not None:
             publisher.publish(event)
+            msg_type = raw.get("type", "unknown")
+            metrics.inc("messages_published", labels={"type": msg_type})
 
     # Set up WebSocket connection
     ws = ExchangeWebSocket(symbols=config.symbols, on_message=on_message)

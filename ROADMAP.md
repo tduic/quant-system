@@ -128,31 +128,43 @@
 - [x] ESLint 9 flat config (`eslint.config.js`) with typescript-eslint + react-hooks, `_` prefix ignore rule
 - [x] All `npx` calls replaced with direct `./node_modules/.bin/` paths for faster execution
 
+### Phase 12 — Monitoring & Alerting
+- [x] Prometheus-compatible MetricsRegistry (counters, gauges, histograms) in `quant_core.metrics`
+- [x] `/metrics` HTTP endpoint on each service for Prometheus scraping
+- [x] Prometheus and Grafana added to Docker Compose (ports 9091, 3001)
+- [x] `prometheus.yml` scrape config for all trading services
+- [x] Resource limits (memory) on every container in docker-compose
+- [x] Pre-built Grafana dashboards (Trading Overview + Service Health, auto-provisioned)
+- [x] Risk breach alerts (Prometheus alert rules + Alertmanager + Slack webhook)
+- [ ] Dead-letter queue for failed messages
+- [ ] Structured log aggregation (Loki)
+
+### Phase 13 — Live Trading Prep
+- [x] Circuit breaker: Redis-backed kill switch checked by all services (alpha, risk, execution)
+- [x] Kill switch HTTP API on risk-gateway (`POST /api/circuit-breaker/trip`, `/reset`, `GET` status)
+- [x] Risk gateway reads real portfolio state from Redis (post-trade service syncs after every fill)
+- [x] Order lifecycle management: `OrderTracker` with state machine (SUBMITTED → ACCEPTED → FILLED/CANCELLED)
+- [x] `OrderStatusUpdate` model + `order.status` Kafka topic for lifecycle events
+- [x] Coinbase Advanced Trade REST adapter (`coinbase_rest.py`): HMAC-SHA256 auth, order placement, cancellation, account queries
+- [x] Token bucket rate limiter (`rate_limiter.py`) + exponential backoff retry policy
+- [x] Execution service supports `TRADING_MODE=paper|live` — live mode routes to Coinbase REST
+- [x] Position reconciliation logic (`reconciliation.py`): compares internal vs exchange balances, flags discrepancies
+- [x] Audit trail: every order approval/rejection/fill published to `audit.log` Kafka topic
+- [x] DB schema: `order_status_history`, `audit_log`, `reconciliation_history` tables (append-only)
+- [x] Secrets management: `.env.example` template, `CoinbaseConfig` with fail-fast validation for live mode
+- [x] Docker Compose: env var interpolation (`${POSTGRES_PASSWORD:-quant_dev}`), no hardcoded secrets
+- [x] Paper trading validation framework (`scripts/paper_trading_validator.py`, `make validate`)
+- [x] Prometheus metrics instrumented in all 5 trading services
+- [ ] TLS/mTLS for inter-service communication
+
 ## Up Next
 
-### Phase 11 — More Strategies
+### Phase 14 — More Strategies
 - [ ] Momentum/trend-following strategy (breakout or moving-average crossover)
 - [ ] Order flow imbalance strategy (trade-level buy/sell pressure)
 - [ ] Strategy combination framework (ensemble signals with weighted voting)
 - [ ] Strategy-level performance attribution in post-trade dashboard
 - [ ] Strategy parameter auto-tuning via backtest grid search
-
-### Phase 12 — Monitoring & Alerting
-- [ ] Prometheus metrics exporter per service (latency, throughput, error rates)
-- [ ] Grafana dashboards for system health (Kafka lag, fill latency, order book staleness)
-- [ ] Risk breach alerts (max drawdown, position limit violations)
-- [ ] Service heartbeat monitoring and dead-letter queue for failed messages
-- [ ] Structured log aggregation (ELK or Loki)
-- [ ] Alerting integration (PagerDuty, Slack webhook, or email)
-
-### Phase 13 — Live Trading Prep
-- [ ] Coinbase authenticated REST API adapter for real order placement
-- [ ] Order lifecycle management (new → ack → partial fill → filled/cancelled)
-- [ ] Position reconciliation against exchange balances
-- [ ] Kill switch: emergency flat-all with single command
-- [ ] Rate limiting and retry logic for exchange API
-- [ ] Audit trail: immutable log of every order sent and fill received
-- [ ] Deployment hardening: secrets management, TLS, health monitoring
 
 ## Design Decisions
 

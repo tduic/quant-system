@@ -286,6 +286,33 @@ class Fill:
 
 
 # ---------------------------------------------------------------------------
+# Order Status Events
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class OrderStatusUpdate:
+    """Status update for an order's lifecycle."""
+
+    order_id: str = ""
+    exchange_order_id: str = ""
+    status: str = ""  # OrderStatus enum value
+    filled_quantity: float = 0.0
+    remaining_quantity: float = 0.0
+    avg_fill_price: float = 0.0
+    timestamp: int = 0
+    reason: str = ""
+    backtest_id: str | None = None
+
+    def to_json(self) -> str:
+        return json.dumps(asdict(self))
+
+    @classmethod
+    def from_json(cls, raw: str | bytes) -> OrderStatusUpdate:
+        return cls(**json.loads(raw))
+
+
+# ---------------------------------------------------------------------------
 # Risk Events
 # ---------------------------------------------------------------------------
 

@@ -62,6 +62,23 @@ kafka-topics --create --if-not-exists \
   --replication-factor 1 \
   --config retention.ms=7776000000
 
+# Order status updates — low volume, 90-day retention
+kafka-topics --create --if-not-exists \
+  --bootstrap-server "${BOOTSTRAP}" \
+  --topic order.status \
+  --partitions 6 \
+  --replication-factor 1 \
+  --config retention.ms=7776000000
+
+# Audit log — append-only, 365-day retention
+kafka-topics --create --if-not-exists \
+  --bootstrap-server "${BOOTSTRAP}" \
+  --topic audit.log \
+  --partitions 3 \
+  --replication-factor 1 \
+  --config retention.ms=31536000000 \
+  --config cleanup.policy=delete
+
 # System heartbeat — minimal, 1-day retention
 kafka-topics --create --if-not-exists \
   --bootstrap-server "${BOOTSTRAP}" \

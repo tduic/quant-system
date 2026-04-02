@@ -9,6 +9,7 @@ import type {
   AnalysisJobSummary,
   AnalysisJobStatus,
   AnalysisJobResult,
+  BacktestRun,
 } from "./types";
 
 const BASE = "/api";
@@ -71,4 +72,6 @@ export const api = {
     fetchJson<{ jobs: AnalysisJobSummary[] }>(`/analysis/jobs`, {
       limit: String(limit),
     }),
+  listBacktests: () =>
+    fetchJson<{ backtests: BacktestRun[] }>("/analysis/backtests"),
 };

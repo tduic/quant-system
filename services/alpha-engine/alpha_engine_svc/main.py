@@ -15,6 +15,7 @@ from alpha_engine_svc.order_book import OrderBook
 from alpha_engine_svc.strategies.mean_reversion import MeanReversionStrategy
 from alpha_engine_svc.strategies.pairs_trading import PairsTradingStrategy
 from alpha_engine_svc.strategy import StrategyRegistry
+from quant_core.circuit_breaker import CircuitBreaker
 from quant_core.config import AppConfig
 from quant_core.kafka_utils import (
     TOPIC_HEARTBEAT,
@@ -25,7 +26,9 @@ from quant_core.kafka_utils import (
     QProducer,
 )
 from quant_core.logging import setup_logging
+from quant_core.metrics import MetricsRegistry
 from quant_core.models import DepthUpdate, Trade, now_ms
+from quant_core.redis_utils import create_sync_redis
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +43,17 @@ async def main() -> None:
         "Starting Alpha Engine Service",
         extra={"symbols": ",".join(config.symbols)},
     )
+
+    run_id = config.backtest_id or "live"
+
+    # --- Metrics ---
+    metrics = MetricsRegistry(SERVICE_NAME)
+    metrics.start_http_server(port=9090)
+
+    # --- Redis + Circuit Breaker ---
+    redis_client = create_sync_redis(config.redis)
+    cb = CircuitBreaker(redis_client, run_id=run_id)
+    logger.info("Circuit breaker initialized (run_id=%s)", run_id)
 
     # --- Kafka ---
     producer = QProducer(config.kafka, backtest_id=config.backtest_id)
@@ -131,9 +145,17 @@ async def main() -> None:
                 trade = Trade.from_json(value)
                 symbol = trade.symbol.upper()
                 trade_count += 1
+                metrics.inc("trades_processed", labels={"symbol": symbol})
 
-                # Feed cross-asset tracker
+                # Feed cross-asset tracker (even when breaker is tripped —
+                # we want the model state to stay current)
                 cross_asset.on_price(symbol, trade.timestamp_exchange, trade.price)
+
+                # Circuit breaker: suppress signal emission
+                if cb.is_tripped():
+                    metrics.set_gauge("circuit_breaker_active", 1.0)
+                    continue
+                metrics.set_gauge("circuit_breaker_active", 0.0)
 
                 for strat in registry.strategies_for_symbol(symbol):
                     sig = strat.on_trade(trade)
@@ -144,6 +166,7 @@ async def main() -> None:
                             value=sig.to_json(),
                         )
                         signal_count += 1
+                        metrics.inc("signals_emitted", labels={"symbol": sig.symbol, "strategy": sig.strategy_id})
                         logger.info(
                             "Signal emitted: %s %s %s (z=%.2f)",
                             sig.side,
