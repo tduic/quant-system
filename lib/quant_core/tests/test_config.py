@@ -9,6 +9,7 @@ import pytest
 
 from quant_core.config import (
     AppConfig,
+    CoinbaseConfig,
     DatabaseConfig,
     KafkaConfig,
     RedisConfig,
@@ -106,6 +107,41 @@ class TestParseSymbols:
             assert _parse_symbols() == []
 
 
+class TestCoinbaseConfig:
+    def test_defaults_to_empty_strings(self):
+        config = CoinbaseConfig()
+        assert config.api_key == ""
+        assert config.api_secret == ""
+
+    def test_from_env_reads_env_vars(self):
+        with patch.dict(
+            os.environ,
+            {
+                "COINBASE_API_KEY": "test-key-123",
+                "COINBASE_API_SECRET": "test-secret-456",
+            },
+        ):
+            config = CoinbaseConfig.from_env()
+            assert config.api_key == "test-key-123"
+            assert config.api_secret == "test-secret-456"
+
+    def test_is_configured_returns_false_when_empty(self):
+        config = CoinbaseConfig()
+        assert config.is_configured is False
+
+    def test_is_configured_returns_false_when_only_key_set(self):
+        config = CoinbaseConfig(api_key="key", api_secret="")
+        assert config.is_configured is False
+
+    def test_is_configured_returns_false_when_only_secret_set(self):
+        config = CoinbaseConfig(api_key="", api_secret="secret")
+        assert config.is_configured is False
+
+    def test_is_configured_returns_true_when_both_set(self):
+        config = CoinbaseConfig(api_key="key", api_secret="secret")
+        assert config.is_configured is True
+
+
 class TestAppConfig:
     def test_from_env_creates_all_sub_configs(self):
         with patch.dict(
@@ -130,3 +166,57 @@ class TestAppConfig:
         with patch.dict(os.environ, {"BACKTEST_ID": "abc-123"}):
             config = AppConfig.from_env()
             assert config.backtest_id == "abc-123"
+
+    def test_from_env_includes_trading_mode_field(self):
+        with patch.dict(os.environ, {"TRADING_MODE": "paper"}):
+            config = AppConfig.from_env()
+            assert config.trading_mode == "paper"
+
+    def test_from_env_defaults_trading_mode_to_paper(self):
+        with patch.dict(os.environ, {}, clear=True):
+            config = AppConfig.from_env()
+            assert config.trading_mode == "paper"
+
+    def test_from_env_accepts_live_trading_mode(self):
+        with patch.dict(
+            os.environ,
+            {
+                "TRADING_MODE": "live",
+                "COINBASE_API_KEY": "test-key",
+                "COINBASE_API_SECRET": "test-secret",
+            },
+        ):
+            config = AppConfig.from_env()
+            assert config.trading_mode == "live"
+
+    def test_from_env_raises_error_when_live_without_coinbase_credentials(self):
+        with patch.dict(os.environ, {"TRADING_MODE": "live"}, clear=True):
+            with pytest.raises(ValueError) as excinfo:
+                AppConfig.from_env()
+            assert "TRADING_MODE=live" in str(excinfo.value)
+            assert "COINBASE_API_KEY" in str(excinfo.value)
+            assert "COINBASE_API_SECRET" in str(excinfo.value)
+
+    def test_from_env_raises_error_when_live_without_api_key(self):
+        with patch.dict(
+            os.environ,
+            {
+                "TRADING_MODE": "live",
+                "COINBASE_API_SECRET": "test-secret",
+            },
+        ):
+            with pytest.raises(ValueError) as excinfo:
+                AppConfig.from_env()
+            assert "TRADING_MODE=live" in str(excinfo.value)
+
+    def test_from_env_raises_error_when_live_without_api_secret(self):
+        with patch.dict(
+            os.environ,
+            {
+                "TRADING_MODE": "live",
+                "COINBASE_API_KEY": "test-key",
+            },
+        ):
+            with pytest.raises(ValueError) as excinfo:
+                AppConfig.from_env()
+            assert "TRADING_MODE=live" in str(excinfo.value)

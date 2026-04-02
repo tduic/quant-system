@@ -79,15 +79,12 @@ class RetryPolicy:
 
     def delay_for_attempt(self, attempt: int) -> float:
         """Calculate delay for a given retry attempt (0-indexed)."""
-        delay = self.base_delay * (self.exponential_base ** attempt)
+        delay = self.base_delay * (self.exponential_base**attempt)
         return min(delay, self.max_delay)
 
     def should_retry(self, attempt: int, status_code: int | None = None) -> bool:
         """Determine if we should retry based on attempt count and status code."""
         if attempt >= self.max_retries:
             return False
-        if status_code is not None:
-            # Don't retry client errors (except 429 rate limit)
-            if 400 <= status_code < 500 and status_code != 429:
-                return False
-        return True
+        # Don't retry client errors (except 429 rate limit)
+        return not (status_code is not None and 400 <= status_code < 500 and status_code != 429)

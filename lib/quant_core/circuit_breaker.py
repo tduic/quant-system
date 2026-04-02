@@ -20,8 +20,10 @@ from __future__ import annotations
 import json
 import logging
 import time
+from typing import TYPE_CHECKING
 
-import redis as sync_redis
+if TYPE_CHECKING:
+    import redis as sync_redis
 
 from quant_core.redis_utils import Keys
 
@@ -65,12 +67,14 @@ class CircuitBreaker:
 
     def trip(self, reason: str = "manual", triggered_by: str = "unknown") -> None:
         """Activate the circuit breaker. All services will stop trading."""
-        payload = json.dumps({
-            "tripped": True,
-            "reason": reason,
-            "triggered_by": triggered_by,
-            "timestamp": time.time(),
-        })
+        payload = json.dumps(
+            {
+                "tripped": True,
+                "reason": reason,
+                "triggered_by": triggered_by,
+                "timestamp": time.time(),
+            }
+        )
         self._redis.set(self._key, payload)
         self._cached_state = True
         self._last_check = time.monotonic()
@@ -96,5 +100,5 @@ class CircuitBreaker:
             data = json.loads(val)
             data["run_id"] = self._run_id
             return data
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             return {"tripped": True, "run_id": self._run_id, "raw": str(val)}

@@ -24,8 +24,8 @@ from quant_core.kafka_utils import (
     TOPIC_AUDIT,
     TOPIC_FILLS,
     TOPIC_HEARTBEAT,
-    TOPIC_ORDERS,
     TOPIC_ORDER_STATUS,
+    TOPIC_ORDERS,
     TOPIC_RAW_DEPTH,
     QConsumer,
     QProducer,
@@ -48,12 +48,14 @@ def _emit_audit(producer: QProducer, event_type: str, detail: dict) -> None:
     producer.produce(
         topic=TOPIC_AUDIT,
         key=SERVICE_NAME,
-        value=json.dumps({
-            "service": SERVICE_NAME,
-            "event": event_type,
-            "timestamp": now_ms(),
-            **detail,
-        }),
+        value=json.dumps(
+            {
+                "service": SERVICE_NAME,
+                "event": event_type,
+                "timestamp": now_ms(),
+                **detail,
+            }
+        ),
     )
 
 
@@ -129,13 +131,15 @@ async def main() -> None:
             producer.produce(
                 topic=TOPIC_HEARTBEAT,
                 key=SERVICE_NAME,
-                value=json.dumps({
-                    "service": SERVICE_NAME,
-                    "timestamp": now_ms(),
-                    "fills": fill_count,
-                    "trading_mode": trading_mode,
-                    "breaker_blocked": breaker_blocked,
-                }),
+                value=json.dumps(
+                    {
+                        "service": SERVICE_NAME,
+                        "timestamp": now_ms(),
+                        "fills": fill_count,
+                        "trading_mode": trading_mode,
+                        "breaker_blocked": breaker_blocked,
+                    }
+                ),
             )
             producer.poll(0.0)
             await asyncio.sleep(10)
@@ -183,10 +187,14 @@ async def main() -> None:
                     breaker_blocked += 1
                     metrics.inc("orders_breaker_blocked")
                     metrics.set_gauge("circuit_breaker_active", 1.0)
-                    _emit_audit(producer, "order_blocked_breaker", {
-                        "order_id": order.order_id,
-                        "symbol": order.symbol,
-                    })
+                    _emit_audit(
+                        producer,
+                        "order_blocked_breaker",
+                        {
+                            "order_id": order.order_id,
+                            "symbol": order.symbol,
+                        },
+                    )
                     if breaker_blocked % 100 == 1:
                         logger.warning("Circuit breaker active — blocked %d orders", breaker_blocked)
                     producer.poll(0.0)
@@ -221,13 +229,17 @@ async def main() -> None:
                             order_type="market",
                         )
                         exchange_order_id = exchange_result.get("id", "")
-                        _emit_audit(producer, "order_sent_exchange", {
-                            "order_id": order.order_id,
-                            "exchange_order_id": exchange_order_id,
-                            "symbol": order.symbol,
-                            "side": order.side,
-                            "quantity": order.quantity,
-                        })
+                        _emit_audit(
+                            producer,
+                            "order_sent_exchange",
+                            {
+                                "order_id": order.order_id,
+                                "exchange_order_id": exchange_order_id,
+                                "symbol": order.symbol,
+                                "side": order.side,
+                                "quantity": order.quantity,
+                            },
+                        )
                         logger.info(
                             "Order sent to exchange: %s → %s",
                             order.order_id,
@@ -236,7 +248,9 @@ async def main() -> None:
                         # Fill event will come from exchange polling
                         # For now, we still simulate the fill immediately
                         fill = simulator.simulate_fill(
-                            order=order, mid_price=mid, spread=spread,
+                            order=order,
+                            mid_price=mid,
+                            spread=spread,
                         )
                     except Exception:
                         logger.exception("Failed to place order %s on exchange", order.order_id)
@@ -249,7 +263,9 @@ async def main() -> None:
                 else:
                     # Paper trading path
                     fill = simulator.simulate_fill(
-                        order=order, mid_price=mid, spread=spread,
+                        order=order,
+                        mid_price=mid,
+                        spread=spread,
                     )
 
                 # Transition to FILLED
@@ -280,17 +296,21 @@ async def main() -> None:
                 metrics.observe("fill_fee", fill.fee, labels={"symbol": fill.symbol})
                 metrics.set_gauge("latest_fill_price", fill.fill_price, labels={"symbol": fill.symbol})
 
-                _emit_audit(producer, "fill_generated", {
-                    "fill_id": fill.fill_id,
-                    "order_id": order.order_id,
-                    "symbol": fill.symbol,
-                    "side": fill.side,
-                    "quantity": fill.quantity,
-                    "fill_price": fill.fill_price,
-                    "fee": fill.fee,
-                    "slippage_bps": fill.slippage_bps,
-                    "trading_mode": trading_mode,
-                })
+                _emit_audit(
+                    producer,
+                    "fill_generated",
+                    {
+                        "fill_id": fill.fill_id,
+                        "order_id": order.order_id,
+                        "symbol": fill.symbol,
+                        "side": fill.side,
+                        "quantity": fill.quantity,
+                        "fill_price": fill.fill_price,
+                        "fee": fill.fee,
+                        "slippage_bps": fill.slippage_bps,
+                        "trading_mode": trading_mode,
+                    },
+                )
 
                 logger.info(
                     "Fill: %s %s %.6f @ %.2f (slippage=%.2f bps, fee=%.4f) [%s]",

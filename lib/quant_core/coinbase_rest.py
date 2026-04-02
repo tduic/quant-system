@@ -144,7 +144,9 @@ class CoinbaseRESTClient:
                 raise CoinbaseAPIError(
                     status_code=response.status_code,
                     message=response.text,
-                    response=response.json() if response.headers.get("content-type", "").startswith("application/json") else None,
+                    response=response.json()
+                    if response.headers.get("content-type", "").startswith("application/json")
+                    else None,
                 )
 
             except httpx.HTTPError as e:
@@ -153,7 +155,8 @@ class CoinbaseRESTClient:
                     logger.warning("HTTP error %s, retrying in %.1fs", e, delay)
                     time.sleep(delay)
                     continue
-                raise
+                msg = f"Max retries exceeded for {method} {path}"
+                raise CoinbaseAPIError(status_code=0, message=msg) from e
 
         msg = f"Max retries exceeded for {method} {path}"
         raise CoinbaseAPIError(status_code=0, message=msg)

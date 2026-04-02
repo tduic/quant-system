@@ -9,8 +9,24 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import datetime
+from enum import Enum
+
+# UTC timezone for Python 3.10 compatibility
+try:
+    from datetime import UTC
+except ImportError:
+    UTC = UTC
+
+# StrEnum for Python 3.10 compatibility
+try:
+    from enum import StrEnum
+except ImportError:
+
+    class StrEnum(str, Enum):  # noqa: UP042
+        """String enum for Python 3.10."""
+
+        pass
 
 # ---------------------------------------------------------------------------
 # Enums

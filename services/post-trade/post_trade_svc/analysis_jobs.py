@@ -193,18 +193,19 @@ def _list_historical_backtests() -> list[dict[str, Any]]:
                 seen_ids.add(bid)
                 # Check if trade data exists for this run
                 has_trades = any(
-                    os.path.isfile(os.path.join(base, f"{bid}{ext}"))
-                    for ext in ("_trades.jsonl", "_trades.json")
+                    os.path.isfile(os.path.join(base, f"{bid}{ext}")) for ext in ("_trades.jsonl", "_trades.json")
                 )
-                results.append({
-                    "backtest_id": bid,
-                    "symbol": data.get("symbol", "unknown"),
-                    "timestamp": data.get("timestamp", ""),
-                    "trades_replayed": data.get("trades_replayed", 0),
-                    "duration_seconds": data.get("duration_seconds", 0),
-                    "has_trades": has_trades,
-                })
-            except (json.JSONDecodeError, OSError):
+                results.append(
+                    {
+                        "backtest_id": bid,
+                        "symbol": data.get("symbol", "unknown"),
+                        "timestamp": data.get("timestamp", ""),
+                        "trades_replayed": data.get("trades_replayed", 0),
+                        "duration_seconds": data.get("duration_seconds", 0),
+                        "has_trades": has_trades,
+                    }
+                )
+            except json.JSONDecodeError, OSError:
                 continue
 
     results.sort(key=lambda r: r.get("timestamp", ""), reverse=True)

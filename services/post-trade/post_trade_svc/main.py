@@ -171,7 +171,9 @@ async def main() -> None:
                     metrics.set_gauge("portfolio_realized_pnl", pnl_data["total_realized_pnl"])
                     metrics.set_gauge("portfolio_unrealized_pnl", pnl_data["total_unrealized_pnl"])
                     metrics.set_gauge("portfolio_total_fees", pnl_data["total_fees"])
-                    drawdown = 1.0 - (pnl_data["current_equity"] / state._peak_equity) if state._peak_equity > 0 else 0.0
+                    drawdown = (
+                        1.0 - (pnl_data["current_equity"] / state._peak_equity) if state._peak_equity > 0 else 0.0
+                    )
                     metrics.set_gauge("portfolio_drawdown_pct", drawdown)
                 except Exception:
                     logger.warning("Failed to sync portfolio state to Redis")

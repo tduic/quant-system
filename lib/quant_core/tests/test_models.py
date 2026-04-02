@@ -12,6 +12,7 @@ from quant_core.models import (
     Fill,
     Order,
     OrderStatus,
+    OrderStatusUpdate,
     OrderType,
     RiskDecision,
     Side,
@@ -384,6 +385,132 @@ class TestEnums:
         assert OrderStatus.REJECTED.value == "REJECTED"
         assert OrderStatus.CANCELLED.value == "CANCELLED"
         assert OrderStatus.PARTIALLY_FILLED.value == "PARTIALLY_FILLED"
+
+
+# -----------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------
+
+
+class TestOrderStatusUpdate:
+    """Test OrderStatusUpdate dataclass for order status tracking."""
+
+    def test_default_values(self):
+        update = OrderStatusUpdate()
+        assert update.order_id == ""
+        assert update.exchange_order_id == ""
+        assert update.status == ""
+        assert update.filled_quantity == 0.0
+        assert update.remaining_quantity == 0.0
+        assert update.avg_fill_price == 0.0
+        assert update.timestamp == 0
+        assert update.reason == ""
+        assert update.backtest_id is None
+
+    def test_roundtrip_serialization_with_all_fields(self):
+        original = OrderStatusUpdate(
+            order_id="order-123",
+            exchange_order_id="exchange-456",
+            status=OrderStatus.PARTIALLY_FILLED.value,
+            filled_quantity=0.5,
+            remaining_quantity=0.5,
+            avg_fill_price=42000.0,
+            timestamp=1672515782136,
+            reason="partial_fill",
+            backtest_id="backtest-789",
+        )
+        json_str = original.to_json()
+        restored = OrderStatusUpdate.from_json(json_str)
+
+        assert restored.order_id == "order-123"
+        assert restored.exchange_order_id == "exchange-456"
+        assert restored.status == OrderStatus.PARTIALLY_FILLED.value
+        assert restored.filled_quantity == pytest.approx(0.5)
+        assert restored.remaining_quantity == pytest.approx(0.5)
+        assert restored.avg_fill_price == pytest.approx(42000.0)
+        assert restored.timestamp == 1672515782136
+        assert restored.reason == "partial_fill"
+        assert restored.backtest_id == "backtest-789"
+
+    def test_to_json_produces_valid_json(self):
+        update = OrderStatusUpdate(
+            order_id="order-123",
+            status="FILLED",
+            filled_quantity=1.0,
+        )
+        json_str = update.to_json()
+        parsed = json.loads(json_str)
+
+        assert parsed["order_id"] == "order-123"
+        assert parsed["status"] == "FILLED"
+        assert parsed["filled_quantity"] == 1.0
+
+    def test_from_json_with_bytes(self):
+        original = OrderStatusUpdate(
+            order_id="order-123",
+            status="FILLED",
+            filled_quantity=1.0,
+            avg_fill_price=42150.50,
+        )
+        json_bytes = original.to_json().encode()
+        restored = OrderStatusUpdate.from_json(json_bytes)
+
+        assert restored.order_id == "order-123"
+        assert restored.status == "FILLED"
+        assert restored.avg_fill_price == pytest.approx(42150.50)
+
+    def test_roundtrip_with_minimal_fields(self):
+        original = OrderStatusUpdate(order_id="simple-order")
+        restored = OrderStatusUpdate.from_json(original.to_json())
+
+        assert restored.order_id == "simple-order"
+        assert restored.exchange_order_id == ""
+        assert restored.status == ""
+        assert restored.filled_quantity == 0.0
+
+    def test_roundtrip_preserves_float_precision(self):
+        original = OrderStatusUpdate(
+            order_id="order-123",
+            avg_fill_price=42000.12345,
+            filled_quantity=0.00012345,
+        )
+        restored = OrderStatusUpdate.from_json(original.to_json())
+
+        assert restored.avg_fill_price == pytest.approx(42000.12345)
+        assert restored.filled_quantity == pytest.approx(0.00012345)
+
+    def test_roundtrip_preserves_large_timestamp(self):
+        large_timestamp = 1704067200000
+        original = OrderStatusUpdate(
+            order_id="order-123",
+            timestamp=large_timestamp,
+        )
+        restored = OrderStatusUpdate.from_json(original.to_json())
+
+        assert restored.timestamp == large_timestamp
+
+    def test_all_fields_survive_roundtrip(self):
+        fields_to_test = {
+            "order_id": "order-abc",
+            "exchange_order_id": "exch-xyz",
+            "status": OrderStatus.ACCEPTED.value,
+            "filled_quantity": 0.75,
+            "remaining_quantity": 0.25,
+            "avg_fill_price": 42100.0,
+            "timestamp": 1672515782136,
+            "reason": "test_reason",
+            "backtest_id": "test-backtest",
+        }
+        original = OrderStatusUpdate(**fields_to_test)
+        json_str = original.to_json()
+        restored = OrderStatusUpdate.from_json(json_str)
+
+        for field_name, field_value in fields_to_test.items():
+            restored_value = getattr(restored, field_name)
+            if isinstance(field_value, float):
+                assert restored_value == pytest.approx(field_value), f"Field {field_name} mismatch"
+            else:
+                assert restored_value == field_value, f"Field {field_name} mismatch"
 
 
 # -----------------------------------------------------------------------

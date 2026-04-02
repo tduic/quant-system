@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import json
 import logging
-import time
+from typing import TYPE_CHECKING, ClassVar
 
-import redis as sync_redis
+if TYPE_CHECKING:
+    import redis as sync_redis
 
 from quant_core.models import Order, OrderStatus, OrderStatusUpdate, now_ms
 
@@ -27,7 +28,7 @@ class OrderTracker:
     """Tracks order state in-memory with Redis persistence."""
 
     # Valid state transitions
-    TRANSITIONS: dict[str, set[str]] = {
+    TRANSITIONS: ClassVar[dict[str, set[str]]] = {
         OrderStatus.SUBMITTED: {OrderStatus.ACCEPTED, OrderStatus.REJECTED},
         OrderStatus.ACCEPTED: {OrderStatus.FILLED, OrderStatus.PARTIALLY_FILLED, OrderStatus.CANCELLED},
         OrderStatus.PARTIALLY_FILLED: {OrderStatus.FILLED, OrderStatus.PARTIALLY_FILLED, OrderStatus.CANCELLED},

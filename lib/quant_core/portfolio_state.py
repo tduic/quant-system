@@ -11,10 +11,11 @@ Key schema:
 
 from __future__ import annotations
 
-import json
 import logging
+from typing import TYPE_CHECKING
 
-import redis as sync_redis
+if TYPE_CHECKING:
+    import redis as sync_redis
 
 from quant_core.redis_utils import Keys
 
@@ -46,22 +47,28 @@ def sync_portfolio_to_redis(
     pipe = r.pipeline()
 
     # Portfolio summary
-    pipe.hset(Keys.portfolio(run_id), mapping={
-        "current_equity": str(current_equity),
-        "peak_equity": str(peak_equity),
-        "realized_pnl": str(realized_pnl),
-        "unrealized_pnl": str(unrealized_pnl),
-        "total_fees": str(total_fees),
-    })
+    pipe.hset(
+        Keys.portfolio(run_id),
+        mapping={
+            "current_equity": str(current_equity),
+            "peak_equity": str(peak_equity),
+            "realized_pnl": str(realized_pnl),
+            "unrealized_pnl": str(unrealized_pnl),
+            "total_fees": str(total_fees),
+        },
+    )
 
     # Per-symbol positions
     for symbol, pos in positions.items():
-        pipe.hset(Keys.position(run_id, symbol), mapping={
-            "quantity": str(pos.get("quantity", 0.0)),
-            "avg_entry_price": str(pos.get("avg_entry_price", 0.0)),
-            "realized_pnl": str(pos.get("realized_pnl", 0.0)),
-            "unrealized_pnl": str(pos.get("unrealized_pnl", 0.0)),
-        })
+        pipe.hset(
+            Keys.position(run_id, symbol),
+            mapping={
+                "quantity": str(pos.get("quantity", 0.0)),
+                "avg_entry_price": str(pos.get("avg_entry_price", 0.0)),
+                "realized_pnl": str(pos.get("realized_pnl", 0.0)),
+                "unrealized_pnl": str(pos.get("unrealized_pnl", 0.0)),
+            },
+        )
 
     pipe.execute()
     logger.debug("Synced portfolio state to Redis (run_id=%s)", run_id)

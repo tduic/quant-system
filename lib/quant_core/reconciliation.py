@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from dataclasses import asdict, dataclass, field
 
 from quant_core.models import now_ms
@@ -90,14 +89,16 @@ def reconcile_positions(
             severity = "critical"
             worst_severity = "critical"
 
-        discrepancies.append(PositionDiscrepancy(
-            symbol=symbol,
-            internal_quantity=internal,
-            exchange_quantity=exchange,
-            difference=internal - exchange,
-            difference_pct=diff_pct * 100,
-            severity=severity,
-        ))
+        discrepancies.append(
+            PositionDiscrepancy(
+                symbol=symbol,
+                internal_quantity=internal,
+                exchange_quantity=exchange,
+                difference=internal - exchange,
+                difference_pct=diff_pct * 100,
+                severity=severity,
+            )
+        )
 
     if discrepancies:
         logger.warning(

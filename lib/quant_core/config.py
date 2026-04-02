@@ -94,10 +94,7 @@ class AppConfig:
 
         # Fail fast: live trading requires API credentials
         if trading_mode == "live" and not coinbase.is_configured:
-            msg = (
-                "TRADING_MODE=live requires COINBASE_API_KEY and "
-                "COINBASE_API_SECRET environment variables"
-            )
+            msg = "TRADING_MODE=live requires COINBASE_API_KEY and COINBASE_API_SECRET environment variables"
             raise ValueError(msg)
 
         return cls(

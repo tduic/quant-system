@@ -78,12 +78,14 @@ def _emit_audit(
     producer.produce(
         topic=TOPIC_AUDIT,
         key=SERVICE_NAME,
-        value=json.dumps({
-            "service": SERVICE_NAME,
-            "event": event_type,
-            "timestamp": now_ms(),
-            **detail,
-        }),
+        value=json.dumps(
+            {
+                "service": SERVICE_NAME,
+                "event": event_type,
+                "timestamp": now_ms(),
+                **detail,
+            }
+        ),
     )
 
 
@@ -138,9 +140,10 @@ async def main() -> None:
     signal.signal(signal.SIGINT, handle_signal_os)
 
     # --- Kill switch HTTP endpoint ---
-    from fastapi import FastAPI
     import threading
+
     import uvicorn
+    from fastapi import FastAPI
 
     kill_app = FastAPI(title="Risk Gateway Controls")
 
@@ -162,7 +165,12 @@ async def main() -> None:
 
     @kill_app.get("/health")
     def health():
-        return {"status": "ok", "approved": approved_count, "rejected": rejected_count, "breaker_blocked": breaker_blocked}
+        return {
+            "status": "ok",
+            "approved": approved_count,
+            "rejected": rejected_count,
+            "breaker_blocked": breaker_blocked,
+        }
 
     kill_port = int(os.getenv("RISK_API_PORT", "8090"))
     uvicorn_config = uvicorn.Config(kill_app, host="0.0.0.0", port=kill_port, log_level="warning")
@@ -176,14 +184,16 @@ async def main() -> None:
             producer.produce(
                 topic=TOPIC_HEARTBEAT,
                 key=SERVICE_NAME,
-                value=json.dumps({
-                    "service": SERVICE_NAME,
-                    "timestamp": now_ms(),
-                    "approved": approved_count,
-                    "rejected": rejected_count,
-                    "breaker_blocked": breaker_blocked,
-                    "breaker_tripped": cb.is_tripped(),
-                }),
+                value=json.dumps(
+                    {
+                        "service": SERVICE_NAME,
+                        "timestamp": now_ms(),
+                        "approved": approved_count,
+                        "rejected": rejected_count,
+                        "breaker_blocked": breaker_blocked,
+                        "breaker_tripped": cb.is_tripped(),
+                    }
+                ),
             )
             producer.poll(0.0)
             await asyncio.sleep(10)
@@ -251,7 +261,10 @@ async def main() -> None:
                 approved_count += 1
                 metrics.inc("orders_approved", labels={"symbol": sig.symbol})
                 metrics.set_gauge("portfolio_equity", state.current_equity)
-                metrics.set_gauge("portfolio_drawdown", 1.0 - (state.current_equity / state.peak_equity) if state.peak_equity > 0 else 0.0)
+                metrics.set_gauge(
+                    "portfolio_drawdown",
+                    1.0 - (state.current_equity / state.peak_equity) if state.peak_equity > 0 else 0.0,
+                )
                 # Create order from signal
                 order = Order(
                     timestamp=now_ms(),
@@ -268,13 +281,17 @@ async def main() -> None:
                     key=order.symbol,
                     value=order.to_json(),
                 )
-                _emit_audit(producer, "order_approved", {
-                    "order_id": order.order_id,
-                    "signal_id": sig.signal_id,
-                    "symbol": order.symbol,
-                    "side": order.side,
-                    "quantity": order.quantity,
-                })
+                _emit_audit(
+                    producer,
+                    "order_approved",
+                    {
+                        "order_id": order.order_id,
+                        "signal_id": sig.signal_id,
+                        "symbol": order.symbol,
+                        "side": order.side,
+                        "quantity": order.quantity,
+                    },
+                )
                 logger.info(
                     "APPROVED: %s %s %.6f %s",
                     order.side,
@@ -285,12 +302,16 @@ async def main() -> None:
             else:
                 rejected_count += 1
                 metrics.inc("orders_rejected", labels={"symbol": sig.symbol, "reason": decision.reason})
-                _emit_audit(producer, "order_rejected", {
-                    "signal_id": sig.signal_id,
-                    "symbol": sig.symbol,
-                    "side": sig.side,
-                    "reason": decision.reason,
-                })
+                _emit_audit(
+                    producer,
+                    "order_rejected",
+                    {
+                        "signal_id": sig.signal_id,
+                        "symbol": sig.symbol,
+                        "side": sig.side,
+                        "reason": decision.reason,
+                    },
+                )
                 logger.info(
                     "REJECTED: %s %s — %s",
                     sig.side,
@@ -309,7 +330,12 @@ async def main() -> None:
     kill_server.should_exit = True
     consumer.close()
     producer.flush(timeout=5.0)
-    logger.info("Risk Gateway stopped. Approved: %d, Rejected: %d, Breaker-blocked: %d", approved_count, rejected_count, breaker_blocked)
+    logger.info(
+        "Risk Gateway stopped. Approved: %d, Rejected: %d, Breaker-blocked: %d",
+        approved_count,
+        rejected_count,
+        breaker_blocked,
+    )
 
 
 if __name__ == "__main__":

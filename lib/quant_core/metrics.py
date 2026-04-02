@@ -16,10 +16,8 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from collections import defaultdict
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
