@@ -138,6 +138,7 @@ async def main() -> None:
                     fee=fill.fee,
                     slippage_bps=fill.slippage_bps,
                     strategy_id=fill.strategy_id,
+                    trading_mode=fill.trading_mode,
                 )
                 state.process_fill(record)
                 fill_count += 1

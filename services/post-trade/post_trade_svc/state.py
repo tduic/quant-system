@@ -41,6 +41,7 @@ class FillRecord:
     slippage_bps: float = 0.0
     strategy_id: str = ""
     decision_price: float = 0.0  # mid_price_at_signal from the original signal
+    trading_mode: str = "paper"  # "paper" or "live"
 
 
 @dataclass
@@ -355,6 +356,7 @@ class PostTradeState:
                     "fee": round(f.fee, 4),
                     "slippage_bps": round(f.slippage_bps, 2),
                     "strategy_id": f.strategy_id,
+                    "trading_mode": f.trading_mode,
                 }
                 for f in filtered[-100:]
             ]

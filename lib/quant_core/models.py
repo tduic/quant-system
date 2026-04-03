@@ -292,13 +292,18 @@ class Fill:
     slippage_bps: float = 0.0
     backtest_id: str | None = None
     strategy_id: str = ""
+    trading_mode: str = "paper"  # "paper" or "live"
 
     def to_json(self) -> str:
         return json.dumps(asdict(self))
 
     @classmethod
     def from_json(cls, raw: str | bytes) -> Fill:
-        return cls(**json.loads(raw))
+        data = json.loads(raw)
+        # Backward compat: older fills won't have trading_mode
+        if "trading_mode" not in data:
+            data["trading_mode"] = "paper"
+        return cls(**data)
 
 
 # ---------------------------------------------------------------------------

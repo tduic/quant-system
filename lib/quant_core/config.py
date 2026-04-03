@@ -85,16 +85,19 @@ class AppConfig:
     symbols: list[str] = field(default_factory=lambda: _parse_symbols())
     log_level: str = "INFO"
     backtest_id: str | None = None
-    trading_mode: str = "paper"  # "paper" or "live"
+    trading_mode: str = "paper"  # default mode: "paper" or "live"
+    strategy_modes: dict[str, str] = field(default_factory=dict)  # per-strategy overrides
 
     @classmethod
     def from_env(cls) -> AppConfig:
         trading_mode = os.getenv("TRADING_MODE", "paper")
         coinbase = CoinbaseConfig.from_env()
+        strategy_modes = _parse_strategy_modes()
 
-        # Fail fast: live trading requires API credentials
-        if trading_mode == "live" and not coinbase.is_configured:
-            msg = "TRADING_MODE=live requires COINBASE_API_KEY and COINBASE_API_SECRET environment variables"
+        # Fail fast: any live strategy requires API credentials
+        has_live = trading_mode == "live" or "live" in strategy_modes.values()
+        if has_live and not coinbase.is_configured:
+            msg = "Live trading requires COINBASE_API_KEY and COINBASE_API_SECRET environment variables"
             raise ValueError(msg)
 
         return cls(
@@ -106,9 +109,33 @@ class AppConfig:
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             backtest_id=os.getenv("BACKTEST_ID"),
             trading_mode=trading_mode,
+            strategy_modes=strategy_modes,
         )
 
 
 def _parse_symbols() -> list[str]:
     raw = os.getenv("SYMBOLS", "btcusdt")
     return [s.strip().lower() for s in raw.split(",") if s.strip()]
+
+
+def _parse_strategy_modes() -> dict[str, str]:
+    """Parse STRATEGY_MODES env var into a dict.
+
+    Format: "strategy_a:live,strategy_b:paper"
+    Returns empty dict if not set (all strategies use default TRADING_MODE).
+    """
+    raw = os.getenv("STRATEGY_MODES", "")
+    if not raw.strip():
+        return {}
+    modes: dict[str, str] = {}
+    for pair in raw.split(","):
+        pair = pair.strip()
+        if ":" not in pair:
+            continue
+        strategy_id, mode = pair.rsplit(":", 1)
+        mode = mode.strip().lower()
+        if mode not in ("paper", "live"):
+            msg = f"Invalid strategy mode '{mode}' for '{strategy_id}' — must be 'paper' or 'live'"
+            raise ValueError(msg)
+        modes[strategy_id.strip()] = mode
+    return modes

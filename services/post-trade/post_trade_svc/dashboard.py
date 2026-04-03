@@ -323,7 +323,18 @@ def _build_excel(data: dict) -> bytes:
     ws_fills = wb.create_sheet("Fills")
     fills = data["fills"]
     if fills.get("fills"):
-        headers = ["Fill ID", "Timestamp", "Symbol", "Side", "Quantity", "Price", "Fee", "Slippage (bps)", "Strategy"]
+        headers = [
+            "Fill ID",
+            "Timestamp",
+            "Symbol",
+            "Side",
+            "Quantity",
+            "Price",
+            "Fee",
+            "Slippage (bps)",
+            "Strategy",
+            "Mode",
+        ]
         write_header(ws_fills, headers)
         for i, f in enumerate(fills["fills"], 2):
             ws_fills.cell(row=i, column=1, value=f["fill_id"][:12])
@@ -335,6 +346,7 @@ def _build_excel(data: dict) -> bytes:
             ws_fills.cell(row=i, column=7, value=f["fee"])
             ws_fills.cell(row=i, column=8, value=f["slippage_bps"])
             ws_fills.cell(row=i, column=9, value=f["strategy_id"])
+            ws_fills.cell(row=i, column=10, value=f.get("trading_mode", "paper"))
 
     # Save to bytes
     buf = io.BytesIO()

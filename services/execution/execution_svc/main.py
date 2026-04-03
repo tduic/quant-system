@@ -4,6 +4,10 @@ Receives approved orders from the Risk Gateway, simulates fills
 (paper trading) or routes to Coinbase REST (live trading),
 and publishes fill events + order status updates.
 
+Supports per-strategy trading modes: each strategy can independently
+be in "paper" or "live" mode, configurable via STRATEGY_MODES env var
+and hot-swappable at runtime via the HTTP API on port 8091.
+
 Includes circuit breaker check — when tripped, orders are rejected
 and no fills are generated.
 """
@@ -13,11 +17,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import signal
 
 from execution_svc.fill_simulator import FillSimulator
 from execution_svc.order_tracker import OrderTracker
+from execution_svc.strategy_mode import StrategyModeManager, start_mode_api
 from quant_core.circuit_breaker import CircuitBreaker
 from quant_core.config import AppConfig
 from quant_core.kafka_utils import (
@@ -65,7 +69,12 @@ async def main() -> None:
     logger.info("Starting Execution Service")
 
     run_id = config.backtest_id or "live"
-    trading_mode = os.getenv("TRADING_MODE", "paper")  # "paper" or "live"
+
+    # --- Strategy mode manager ---
+    mode_manager = StrategyModeManager(
+        default_mode=config.trading_mode,
+        initial_modes=config.strategy_modes,
+    )
 
     # --- Redis ---
     redis_client = create_sync_redis(config.redis)
@@ -95,17 +104,21 @@ async def main() -> None:
 
     # --- Coinbase REST client (live trading) ---
     live_client = None
-    if trading_mode == "live":
+    if mode_manager.has_any_live() or config.coinbase.is_configured:
         try:
             from quant_core.coinbase_rest import CoinbaseRESTClient
 
             live_client = CoinbaseRESTClient.from_env()
-            logger.info("Live trading mode enabled — Coinbase REST client initialized")
+            logger.info("Coinbase REST client initialized (available for live strategies)")
         except Exception:
-            logger.exception("Failed to initialize Coinbase REST client, falling back to paper trading")
-            trading_mode = "paper"
+            logger.exception("Failed to initialize Coinbase REST client — live strategies will be rejected")
 
-    logger.info("Trading mode: %s", trading_mode)
+    # --- Strategy mode HTTP API (port 8091) ---
+    mode_api = start_mode_api(mode_manager, live_client_ready=live_client is not None, port=8091)
+
+    logger.info("Default trading mode: %s", config.trading_mode)
+    if config.strategy_modes:
+        logger.info("Per-strategy overrides: %s", config.strategy_modes)
 
     # --- Track latest mid/spread per symbol ---
     latest_mid: dict[str, float] = {}
@@ -136,7 +149,7 @@ async def main() -> None:
                         "service": SERVICE_NAME,
                         "timestamp": now_ms(),
                         "fills": fill_count,
-                        "trading_mode": trading_mode,
+                        "strategy_modes": mode_manager.get_all(),
                         "breaker_blocked": breaker_blocked,
                     }
                 ),
@@ -208,6 +221,9 @@ async def main() -> None:
                     logger.warning("No market data for %s, skipping order %s", symbol, order.order_id)
                     continue
 
+                # --- Determine trading mode for this order's strategy ---
+                order_mode = mode_manager.get_mode(order.strategy_id)
+
                 # Register order and transition to ACCEPTED
                 tracker.register_order(order)
                 accepted_update = tracker.transition(order.order_id, OrderStatus.ACCEPTED)
@@ -218,8 +234,8 @@ async def main() -> None:
                         value=accepted_update.to_json(),
                     )
 
-                # --- Execute (paper or live) ---
-                if trading_mode == "live" and live_client is not None:
+                # --- Execute (per-strategy paper or live) ---
+                if order_mode == "live" and live_client is not None:
                     # Live trading path — place real order on Coinbase
                     try:
                         exchange_result = live_client.place_order(
@@ -238,12 +254,15 @@ async def main() -> None:
                                 "symbol": order.symbol,
                                 "side": order.side,
                                 "quantity": order.quantity,
+                                "strategy_id": order.strategy_id,
+                                "trading_mode": order_mode,
                             },
                         )
                         logger.info(
-                            "Order sent to exchange: %s → %s",
+                            "Order sent to exchange: %s → %s [strategy=%s, mode=live]",
                             order.order_id,
                             exchange_order_id,
+                            order.strategy_id,
                         )
                         # Fill event will come from exchange polling
                         # For now, we still simulate the fill immediately
@@ -260,6 +279,28 @@ async def main() -> None:
                             reason="exchange_error",
                         )
                         continue
+                elif order_mode == "live" and live_client is None:
+                    # Live requested but no client — reject rather than silently paper-fill
+                    logger.error(
+                        "Strategy %s is set to live but Coinbase client not available — rejecting order %s",
+                        order.strategy_id,
+                        order.order_id,
+                    )
+                    tracker.transition(
+                        order.order_id,
+                        OrderStatus.REJECTED,
+                        reason="live_client_unavailable",
+                    )
+                    _emit_audit(
+                        producer,
+                        "order_rejected_no_live_client",
+                        {
+                            "order_id": order.order_id,
+                            "strategy_id": order.strategy_id,
+                        },
+                    )
+                    producer.poll(0.0)
+                    continue
                 else:
                     # Paper trading path
                     fill = simulator.simulate_fill(
@@ -267,6 +308,9 @@ async def main() -> None:
                         mid_price=mid,
                         spread=spread,
                     )
+
+                # Tag fill with trading mode
+                fill.trading_mode = order_mode
 
                 # Transition to FILLED
                 filled_update = tracker.transition(
@@ -291,7 +335,7 @@ async def main() -> None:
                     value=fill.to_json(),
                 )
                 fill_count += 1
-                metrics.inc("fills_total", labels={"symbol": fill.symbol, "side": fill.side, "mode": trading_mode})
+                metrics.inc("fills_total", labels={"symbol": fill.symbol, "side": fill.side, "mode": order_mode})
                 metrics.observe("fill_slippage_bps", fill.slippage_bps, labels={"symbol": fill.symbol})
                 metrics.observe("fill_fee", fill.fee, labels={"symbol": fill.symbol})
                 metrics.set_gauge("latest_fill_price", fill.fill_price, labels={"symbol": fill.symbol})
@@ -308,19 +352,21 @@ async def main() -> None:
                         "fill_price": fill.fill_price,
                         "fee": fill.fee,
                         "slippage_bps": fill.slippage_bps,
-                        "trading_mode": trading_mode,
+                        "strategy_id": order.strategy_id,
+                        "trading_mode": order_mode,
                     },
                 )
 
                 logger.info(
-                    "Fill: %s %s %.6f @ %.2f (slippage=%.2f bps, fee=%.4f) [%s]",
+                    "Fill: %s %s %.6f @ %.2f (slippage=%.2f bps, fee=%.4f) [strategy=%s, mode=%s]",
                     fill.side,
                     fill.symbol,
                     fill.quantity,
                     fill.fill_price,
                     fill.slippage_bps,
                     fill.fee,
-                    trading_mode,
+                    order.strategy_id,
+                    order_mode,
                 )
 
             producer.poll(0.0)
@@ -330,6 +376,7 @@ async def main() -> None:
 
     await shutdown_event.wait()
 
+    mode_api.shutdown()
     heartbeat_task.cancel()
     consumer.close()
     producer.flush(timeout=5.0)

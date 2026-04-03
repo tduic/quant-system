@@ -193,7 +193,6 @@ class TestAppConfig:
         with patch.dict(os.environ, {"TRADING_MODE": "live"}, clear=True):
             with pytest.raises(ValueError) as excinfo:
                 AppConfig.from_env()
-            assert "TRADING_MODE=live" in str(excinfo.value)
             assert "COINBASE_API_KEY" in str(excinfo.value)
             assert "COINBASE_API_SECRET" in str(excinfo.value)
 
@@ -207,7 +206,7 @@ class TestAppConfig:
         ):
             with pytest.raises(ValueError) as excinfo:
                 AppConfig.from_env()
-            assert "TRADING_MODE=live" in str(excinfo.value)
+            assert "Live trading" in str(excinfo.value)
 
     def test_from_env_raises_error_when_live_without_api_secret(self):
         with patch.dict(
@@ -219,4 +218,4 @@ class TestAppConfig:
         ):
             with pytest.raises(ValueError) as excinfo:
                 AppConfig.from_env()
-            assert "TRADING_MODE=live" in str(excinfo.value)
+            assert "Live trading" in str(excinfo.value)
