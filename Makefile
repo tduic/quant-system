@@ -1,4 +1,4 @@
-.PHONY: help up up-build down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-cpp test-watch lint lint-fix format backtest backtest-list backtest-results cpp-build cpp-install cpp-test cpp-benchmark cpp-clean fe-install fe-dev fe-build fe-lint validate validate-continuous validate-long
+.PHONY: help up up-build up-lowmem up-lowmem-build down logs status ps db-shell kafka-topics kafka-consume-trades redis-cli clean build restart test test-cov test-lib test-market-data test-storage test-alpha test-risk test-execution test-post-trade test-backtest test-cpp test-watch lint lint-fix format backtest backtest-list backtest-results cpp-build cpp-install cpp-test cpp-benchmark cpp-clean fe-install fe-dev fe-build fe-lint validate validate-continuous validate-long
 
 # Default target
 help: ## Show this help
@@ -34,6 +34,21 @@ up-build: ## Start all services, rebuild changed images
 	@echo "  Dashboard UI:  localhost:3000 (React frontend)"
 	@echo ""
 	@echo "Run 'make logs' to follow service output"
+
+LOWMEM := -f docker-compose.yml -f docker-compose.low-mem.yml
+
+up-lowmem: ## Start all services with reduced memory limits (~3GB total, for 8GB machines)
+	docker compose $(LOWMEM) up -d
+	@echo ""
+	@echo "=== Quant system starting (low-memory mode) ==="
+	@echo "  Total memory budget: ~3GB (down from 6GB)"
+	@echo "  Dashboard UI:  localhost:3000"
+	@echo "  Dashboard API: localhost:8080"
+	@echo ""
+	@echo "Run 'make logs' to follow service output"
+
+up-lowmem-build: ## Start all services with reduced memory limits, rebuild images
+	docker compose $(LOWMEM) up -d --build
 
 up-infra: ## Start only infrastructure (Kafka, TimescaleDB, Redis)
 	docker compose up -d zookeeper kafka kafka-init timescaledb redis
