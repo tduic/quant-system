@@ -472,13 +472,13 @@ def _run_monte_carlo(
 
     store._update(job_id, progress=20)
 
-    # Build equity from a baseline run
+    # Use the real time-bucketed equity series from the evaluator, not a
+    # fake linear interpolation. This gives Monte Carlo accurate per-period
+    # returns with the right annualization factor.
     baseline = evaluator.evaluate(trades, {})
     initial = 100_000.0
-    final = initial * (1 + baseline["total_return"])
-    n_eq = max(len(trades) // 10, 2)
-    step = (final - initial) / n_eq
-    equity = [initial + i * step for i in range(n_eq + 1)]
+    equity = [initial, *baseline.get("equity_series", [])]
+    bucket_ms = int(baseline.get("bucket_ms", 60 * 60 * 1000))
 
     store._update(job_id, progress=40)
 
@@ -487,7 +487,7 @@ def _run_monte_carlo(
         block_size=int(params.get("block_size", 1)),
         seed=params.get("seed"),
     )
-    result = run_monte_carlo(equity, mc_config)
+    result = run_monte_carlo(equity, mc_config, bucket_ms=bucket_ms)
 
     store._update(job_id, progress=90)
 
@@ -581,19 +581,18 @@ def _run_validate(
     )
     store._update(job_id, progress=35)
 
-    # Monte Carlo
+    # Monte Carlo — use real time-bucketed equity from evaluator
     baseline = evaluator.evaluate(trades, {"threshold_std": 2.0})
     initial = 100_000.0
-    final = initial * (1 + baseline["total_return"])
-    n_eq = max(len(trades) // 10, 2)
-    step = (final - initial) / n_eq
-    equity = [initial + i * step for i in range(n_eq + 1)]
+    equity = [initial, *baseline.get("equity_series", [])]
+    bucket_ms = int(baseline.get("bucket_ms", 60 * 60 * 1000))
     mc_result = run_monte_carlo(
         equity,
         MonteCarloConfig(
             n_simulations=int(params.get("simulations", 500)),
             seed=params.get("seed"),
         ),
+        bucket_ms=bucket_ms,
     )
     store._update(job_id, progress=65)
 

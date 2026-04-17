@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-ANNUAL_FACTOR = 365.0
+MS_PER_YEAR = 365.0 * 24.0 * 60.0 * 60.0 * 1000.0
+HOUR_MS = 60 * 60 * 1000
 
 
 @dataclass
@@ -77,16 +78,20 @@ def _compute_returns(equity_curve: list[float]) -> list[float]:
     ]
 
 
-def _sharpe_from_returns(returns: list[float]) -> float:
-    """Annualized Sharpe from a return series."""
+def _sharpe_from_returns(returns: list[float], bucket_ms: int = HOUR_MS) -> float:
+    """Annualized Sharpe from a bucketed return series.
+
+    `bucket_ms` is the time span each return represents. Annualization is
+    sqrt(buckets_per_year). Using hourly returns → sqrt(8760).
+    """
     if len(returns) < 2:
         return 0.0
     mean = sum(returns) / len(returns)
-    var = sum((r - mean) ** 2 for r in returns) / len(returns)
+    var = sum((r - mean) ** 2 for r in returns) / (len(returns) - 1)
     std = var**0.5
     if std == 0:
         return 0.0
-    return (mean / std) * math.sqrt(ANNUAL_FACTOR)
+    return (mean / std) * math.sqrt(MS_PER_YEAR / bucket_ms)
 
 
 def _max_drawdown_from_returns(returns: list[float]) -> float:
@@ -176,6 +181,7 @@ def _resample_returns(
 def run_monte_carlo(
     equity_curve: list[float],
     config: MonteCarloConfig | None = None,
+    bucket_ms: int = HOUR_MS,
 ) -> MonteCarloResult:
     """Run Monte Carlo simulation on an equity curve.
 
@@ -183,8 +189,11 @@ def run_monte_carlo(
     of Sharpe ratio, max drawdown, and total return.
 
     Args:
-        equity_curve: Time series of portfolio equity values.
+        equity_curve: Time series of portfolio equity values, where each
+            adjacent pair represents one bucket of duration `bucket_ms`.
         config: Simulation configuration (uses defaults if None).
+        bucket_ms: Time span each equity point represents. Used to annualize
+            Sharpe correctly. Defaults to 1 hour.
 
     Returns:
         MonteCarloResult with distributions and confidence intervals.
@@ -197,7 +206,7 @@ def run_monte_carlo(
         return MonteCarloResult()
 
     # Observed metrics
-    observed_sharpe = _sharpe_from_returns(returns)
+    observed_sharpe = _sharpe_from_returns(returns, bucket_ms)
     observed_dd = _max_drawdown_from_returns(returns)
     observed_ret = _total_return_from_returns(returns)
 
@@ -209,7 +218,7 @@ def run_monte_carlo(
 
     for i in range(config.n_simulations):
         resampled = _resample_returns(returns, rng, config.block_size)
-        sim_sharpes.append(_sharpe_from_returns(resampled))
+        sim_sharpes.append(_sharpe_from_returns(resampled, bucket_ms))
         sim_drawdowns.append(_max_drawdown_from_returns(resampled))
         sim_returns.append(_total_return_from_returns(resampled))
 

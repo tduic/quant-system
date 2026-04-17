@@ -67,7 +67,7 @@ def _pick_bucket_ms(span_ms: int) -> int:
     if span_ms >= 48 * HOUR_MS:
         return HOUR_MS  # 48h+ of data → hourly
     if span_ms >= 2 * HOUR_MS:
-        return 5 * MINUTE_MS  # 2h–48h → 5-minute buckets
+        return 5 * MINUTE_MS  # 2h-48h -> 5-minute buckets
     return MINUTE_MS  # shorter windows → per-minute
 
 
@@ -88,6 +88,9 @@ def _compute_metrics_from_fills(
             "num_trades": 0,
             "num_signals": signals_emitted,
             "total_costs": 0.0,
+            "bucket_ms": HOUR_MS,
+            "equity_series": [],
+            "bucket_returns": [],
         }
 
     # Track position and PnL
@@ -149,14 +152,16 @@ def _compute_metrics_from_fills(
         bucket = f.timestamp // bucket_ms if f.timestamp > 0 else 0
         bucket_equity[bucket] = equity
 
-    # Bucketed returns for Sharpe
+    # Bucketed equity time-series for Sharpe and downstream analyses.
+    # Consumers (e.g. Monte Carlo) use this with `bucket_ms` to annualize.
+    equity_series: list[float] = []
+    bucket_returns: list[float] = []
     sharpe = 0.0
     if len(bucket_equity) >= 2:
         buckets = sorted(bucket_equity.keys())
-        bucket_returns: list[float] = []
+        equity_series = [bucket_equity[b] for b in buckets]
         prev = initial_equity
-        for b in buckets:
-            e = bucket_equity[b]
+        for e in equity_series:
             if prev > 0:
                 bucket_returns.append((e - prev) / prev)
             prev = e
@@ -177,6 +182,9 @@ def _compute_metrics_from_fills(
         "max_drawdown": max_dd,
         "num_trades": len(fills),
         "num_signals": signals_emitted,
+        "bucket_ms": bucket_ms,
+        "equity_series": equity_series,
+        "bucket_returns": bucket_returns,
         "total_costs": total_fees + total_slippage_cost,
         "total_fees": total_fees,
         "total_slippage_cost": total_slippage_cost,
