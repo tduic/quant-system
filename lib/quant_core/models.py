@@ -289,6 +289,8 @@ class Fill:
     quantity: float = 0.0
     fill_price: float = 0.0
     fee: float = 0.0
+    fee_rate: float = 0.0
+    is_maker: bool = False
     slippage_bps: float = 0.0
     backtest_id: str | None = None
     strategy_id: str = ""
@@ -300,9 +302,10 @@ class Fill:
     @classmethod
     def from_json(cls, raw: str | bytes) -> Fill:
         data = json.loads(raw)
-        # Backward compat: older fills won't have trading_mode
-        if "trading_mode" not in data:
-            data["trading_mode"] = "paper"
+        # Backward compat: older fills may lack newer fields
+        data.setdefault("trading_mode", "paper")
+        data.setdefault("fee_rate", 0.0)
+        data.setdefault("is_maker", False)
         return cls(**data)
 
 

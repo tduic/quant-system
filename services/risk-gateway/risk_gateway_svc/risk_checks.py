@@ -40,7 +40,7 @@ class RiskLimits:
 
     max_position_size: float = 1.0  # max quantity per symbol
     max_order_notional: float = 100_000.0  # max single order value in USD
-    max_drawdown_pct: float = 0.05  # 5% max drawdown
+    max_drawdown_pct: float = 0.10  # 10% hard stop drawdown
     max_total_exposure: float = 500_000.0  # max total notional exposure
     max_var_pct: float = 0.02  # max VaR as % of equity (2%)
 
@@ -70,6 +70,26 @@ def check_drawdown(state: PortfolioState, limits: RiskLimits) -> str | None:
     if drawdown > limits.max_drawdown_pct:
         return f"drawdown: current {drawdown:.2%} exceeds limit {limits.max_drawdown_pct:.2%}"
     return None
+
+
+def drawdown_scale_factor(state: PortfolioState, limits: RiskLimits) -> float:
+    """Graduated position scaling based on drawdown severity.
+
+    Returns a multiplier (0.0 to 1.0) applied to order quantity:
+        - 0-3% drawdown: full size (1.0)
+        - 3-7% drawdown: linearly scale from 1.0 to 0.25
+        - 7-10% drawdown: 0.25x (minimal size, stay in the game)
+        - >10% drawdown: 0.0 (hard stop via check_drawdown)
+    """
+    if state.peak_equity <= 0:
+        return 1.0
+    drawdown = (state.peak_equity - state.current_equity) / state.peak_equity
+    if drawdown <= 0.03:
+        return 1.0
+    if drawdown <= 0.07:
+        # Linear scale from 1.0 at 3% to 0.25 at 7%
+        return 1.0 - (drawdown - 0.03) / 0.04 * 0.75
+    return 0.25
 
 
 def check_var(state: PortfolioState, limits: RiskLimits, var_pct: float | None = None) -> str | None:
@@ -146,11 +166,15 @@ def run_risk_checks(
             checks_failed=checks_failed,
         )
 
+    # Apply graduated position scaling based on drawdown
+    scale = drawdown_scale_factor(state, limits)
+    adjusted_qty = signal.target_quantity * scale
+
     return RiskDecision(
         signal_id=signal.signal_id,
         decision="APPROVED",
-        reason="all_checks_passed",
-        adjusted_quantity=signal.target_quantity,
+        reason="all_checks_passed" if scale >= 1.0 else f"scaled_by_drawdown({scale:.2f})",
+        adjusted_quantity=adjusted_qty,
         timestamp=now_ms(),
         checks_passed=checks_passed,
         checks_failed=[],

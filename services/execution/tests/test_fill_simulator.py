@@ -8,6 +8,7 @@ from execution_svc.fill_simulator import (
     DEFAULT_FEE_RATE,
     FillSimulator,
     brownian_bridge_sample,
+    coinbase_fee_rate,
     walk_the_book,
 )
 from quant_core.models import Order
@@ -69,12 +70,23 @@ class TestSlippage:
 
 
 class TestFees:
-    def test_default_fee_rate(self, sim: FillSimulator, buy_order: Order):
+    def test_tiered_fee_default(self, sim: FillSimulator, buy_order: Order):
+        """Default sim uses tiered fees — starts at lowest tier (taker, $0 volume)."""
         fill = sim.simulate_fill(buy_order, mid_price=80_000.0, spread=2.0)
-        expected_fee = 0.1 * 80_001.0 * DEFAULT_FEE_RATE
+        # At $0 volume, taker rate = 1.2%
+        expected_rate = coinbase_fee_rate(0.0, is_maker=False)
+        expected_fee = 0.1 * 80_001.0 * expected_rate
         assert fill.fee == pytest.approx(expected_fee)
 
-    def test_custom_fee_rate(self, buy_order: Order):
+    def test_tiered_fee_volume_progression(self, buy_order: Order):
+        """Fee rate should decrease as volume accumulates."""
+        sim = FillSimulator()
+        # First fill at $0 volume tier
+        fill1 = sim.simulate_fill(buy_order, mid_price=80_000.0, spread=0.0)
+        rate_at_zero = coinbase_fee_rate(0.0, is_maker=False)
+        assert fill1.fee == pytest.approx(0.1 * 80_000.0 * rate_at_zero)
+
+    def test_fixed_fee_rate(self, buy_order: Order):
         sim = FillSimulator(fee_rate=0.001)
         fill = sim.simulate_fill(buy_order, mid_price=80_000.0, spread=0.0)
         assert fill.fee == pytest.approx(0.1 * 80_000.0 * 0.001)
@@ -83,6 +95,19 @@ class TestFees:
         sim = FillSimulator(fee_rate=0.0)
         fill = sim.simulate_fill(buy_order, mid_price=80_000.0, spread=0.0)
         assert fill.fee == pytest.approx(0.0)
+
+    def test_coinbase_fee_tiers(self):
+        """Verify fee tier lookup returns correct rates."""
+        # Lowest tier taker
+        assert coinbase_fee_rate(0, is_maker=False) == 0.0120
+        assert coinbase_fee_rate(0, is_maker=True) == 0.0060
+        # $1K-$10K tier
+        assert coinbase_fee_rate(5_000, is_maker=False) == 0.0075
+        assert coinbase_fee_rate(5_000, is_maker=True) == 0.0035
+        # $50K-$500K tier
+        assert coinbase_fee_rate(100_000, is_maker=True) == 0.0015
+        # Top tier
+        assert coinbase_fee_rate(300_000_000, is_maker=False) == 0.0005
 
 
 class TestFillMetadata:

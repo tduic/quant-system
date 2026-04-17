@@ -25,11 +25,11 @@ from quant_core.models import DepthUpdate, Signal, Trade, now_ms
 logger = logging.getLogger(__name__)
 
 DEFAULT_PARAMS = {
-    "window_size": 100,  # number of trades in rolling window
-    "threshold_std": 2.0,  # z-score threshold to trigger signal
-    "warmup_trades": 50,  # minimum trades before generating signals
+    "window_size": 200,  # number of trades in rolling window
+    "threshold_std": 2.5,  # z-score threshold to trigger signal
+    "warmup_trades": 100,  # minimum trades before generating signals
     "base_quantity": 0.001,  # base order size in base asset
-    "cooldown_trades": 10,  # minimum trades between signals
+    "cooldown_trades": 30,  # minimum trades between signals
 }
 
 
@@ -88,7 +88,9 @@ class MeanReversionStrategy(BaseStrategy):
             return None
 
         # Z-score: how many vols away from VWAP
-        z_score = (trade.price - features.vwap) / features.volatility if features.volatility > 0 else 0.0
+        # Volatility is in return space, so scale by VWAP to get absolute price vol
+        abs_volatility = features.volatility * features.vwap
+        z_score = (trade.price - features.vwap) / abs_volatility if abs_volatility > 0 else 0.0
         threshold = self.params["threshold_std"]
 
         side = None
@@ -111,6 +113,13 @@ class MeanReversionStrategy(BaseStrategy):
         self._last_signal_side = side
         self._trades_since_last_signal = 0
 
+        # Urgency determines order type (LIMIT vs MARKET):
+        #   z near threshold (2.5-3.5) → low urgency → LIMIT (maker fee)
+        #   z far from threshold (>3.5) → high urgency → MARKET (taker fee)
+        # Most signals should be limit orders to save on fees.
+        z_excess = abs(z_score) - threshold
+        urgency = min(z_excess / threshold, 1.0)  # 0.0 at threshold, 1.0 at 2x threshold
+
         return Signal(
             timestamp=now_ms(),
             strategy_id=self.strategy_id,
@@ -118,7 +127,7 @@ class MeanReversionStrategy(BaseStrategy):
             side=side,
             strength=strength,
             target_quantity=self.params["base_quantity"],
-            urgency=min(strength, 1.0),
+            urgency=urgency,
             mid_price_at_signal=self._mid_price or trade.price,
             spread_at_signal=self._spread or 0.0,
             metadata={

@@ -20,8 +20,33 @@ from quant_core.models import Fill, Order, now_ms
 
 logger = logging.getLogger(__name__)
 
-# Default fee rate (Coinbase taker fee for < $10k volume)
-DEFAULT_FEE_RATE = 0.006  # 0.6%
+# Coinbase Advanced Trade fee schedule (2026)
+# Tiers based on trailing 30-day USD volume, updated hourly.
+# Each entry: (volume_threshold, maker_rate, taker_rate)
+COINBASE_FEE_TIERS: list[tuple[float, float, float]] = [
+    (1_000, 0.0060, 0.0120),        # $0 - $1K
+    (10_000, 0.0035, 0.0075),       # $1K - $10K
+    (50_000, 0.0025, 0.0040),       # $10K - $50K
+    (500_000, 0.0015, 0.0025),      # $50K - $500K
+    (1_000_000, 0.0010, 0.0020),    # $500K - $1M
+    (15_000_000, 0.0007, 0.0016),   # $1M - $15M
+    (50_000_000, 0.0005, 0.0014),   # $15M - $50M
+    (100_000_000, 0.0002, 0.0010),  # $50M - $100M
+    (250_000_000, 0.0000, 0.0008),  # $100M - $250M
+    (float("inf"), 0.0000, 0.0005), # $250M+
+]
+
+
+def coinbase_fee_rate(volume_30d: float, is_maker: bool = True) -> float:
+    """Look up Coinbase fee rate for a given 30-day volume."""
+    for threshold, maker, taker in COINBASE_FEE_TIERS:
+        if volume_30d < threshold:
+            return maker if is_maker else taker
+    return COINBASE_FEE_TIERS[-1][1] if is_maker else COINBASE_FEE_TIERS[-1][2]
+
+
+# Default: assume low-volume taker (worst case, most realistic for small accounts)
+DEFAULT_FEE_RATE = 0.0075  # 0.75% taker at $1K-$10K tier
 
 # Default latency for order to reach exchange (ms)
 DEFAULT_LATENCY_MS = 50
@@ -105,18 +130,37 @@ class FillSimulator:
 
     def __init__(
         self,
-        fee_rate: float = DEFAULT_FEE_RATE,
+        fee_rate: float | None = None,
         use_brownian_bridge: bool = False,
         latency_ms: float = DEFAULT_LATENCY_MS,
+        use_tiered_fees: bool = True,
     ):
-        self._fee_rate = fee_rate
+        self._fixed_fee_rate = fee_rate
+        self._use_tiered_fees = use_tiered_fees and fee_rate is None
         self._use_brownian_bridge = use_brownian_bridge
         self._latency_ms = latency_ms
         self._last_volatility: float = 0.0
+        self._rolling_volume_30d: float = 0.0  # tracked externally or estimated
 
     def set_volatility(self, volatility: float) -> None:
         """Update the current volatility estimate (annualized)."""
         self._last_volatility = volatility
+
+    def set_rolling_volume(self, volume_30d: float) -> None:
+        """Update trailing 30-day volume for tiered fee calculation."""
+        self._rolling_volume_30d = volume_30d
+
+    def fee_rate_for_order(self, order: Order) -> tuple[float, bool]:
+        """Return (fee_rate, is_maker) for an order based on its type and volume tier.
+
+        LIMIT orders are maker (add liquidity), MARKET orders are taker (remove liquidity).
+        """
+        is_maker = order.order_type == "LIMIT"
+        if self._fixed_fee_rate is not None:
+            return self._fixed_fee_rate, is_maker
+        if self._use_tiered_fees:
+            return coinbase_fee_rate(self._rolling_volume_30d, is_maker), is_maker
+        return DEFAULT_FEE_RATE, is_maker
 
     def simulate_fill(
         self,
@@ -125,12 +169,18 @@ class FillSimulator:
         spread: float,
         book_depth: list[tuple[float, float]] | None = None,
     ) -> Fill:
-        """Simulate a market order fill.
+        """Simulate an order fill with maker/taker fee distinction.
 
-        If use_brownian_bridge is True and volatility is available, models
-        the price path during order latency. Otherwise, simple spread model.
+        LIMIT orders pay maker fees (lower), MARKET orders pay taker fees (higher).
+        For LIMIT orders, fills at the limit price (no spread crossing).
+        For MARKET orders, fills at mid ± half spread (or via book/bridge model).
         """
-        if self._use_brownian_bridge and self._last_volatility > 0:
+        is_maker = order.order_type == "LIMIT"
+
+        if is_maker and order.limit_price is not None:
+            # Maker: fill at the limit price (assumes it gets filled)
+            fill_price = order.limit_price
+        elif self._use_brownian_bridge and self._last_volatility > 0:
             fill_price = self._brownian_bridge_fill(order, mid_price, spread, book_depth)
         elif book_depth:
             fill_price = walk_the_book(order.quantity, book_depth)
@@ -138,7 +188,12 @@ class FillSimulator:
             fill_price = self._simple_fill(order, mid_price, spread)
 
         slippage_bps = abs(fill_price - mid_price) / mid_price * 10_000 if mid_price > 0 else 0.0
-        fee = order.quantity * fill_price * self._fee_rate
+        notional = order.quantity * fill_price
+        fee_rate, _ = self.fee_rate_for_order(order)
+        fee = notional * fee_rate
+
+        # Update rolling volume estimate for tiered fee calculation
+        self._rolling_volume_30d += notional
 
         return Fill(
             fill_id=str(uuid.uuid4()),
@@ -149,6 +204,8 @@ class FillSimulator:
             quantity=order.quantity,
             fill_price=fill_price,
             fee=fee,
+            fee_rate=fee_rate,
+            is_maker=is_maker,
             slippage_bps=slippage_bps,
             backtest_id=order.backtest_id,
             strategy_id=order.strategy_id,

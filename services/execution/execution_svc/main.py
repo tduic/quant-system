@@ -351,6 +351,8 @@ async def main() -> None:
                         "quantity": fill.quantity,
                         "fill_price": fill.fill_price,
                         "fee": fill.fee,
+                        "fee_rate": fill.fee_rate,
+                        "is_maker": fill.is_maker,
                         "slippage_bps": fill.slippage_bps,
                         "strategy_id": order.strategy_id,
                         "trading_mode": order_mode,
@@ -358,13 +360,15 @@ async def main() -> None:
                 )
 
                 logger.info(
-                    "Fill: %s %s %.6f @ %.2f (slippage=%.2f bps, fee=%.4f) [strategy=%s, mode=%s]",
+                    "Fill: %s %s %.6f @ %.2f (slippage=%.2f bps, fee=%.4f, rate=%.2f%% %s) [strategy=%s, mode=%s]",
                     fill.side,
                     fill.symbol,
                     fill.quantity,
                     fill.fill_price,
                     fill.slippage_bps,
                     fill.fee,
+                    fill.fee_rate * 100,
+                    "maker" if fill.is_maker else "taker",
                     order.strategy_id,
                     order_mode,
                 )

@@ -97,9 +97,9 @@ class FeatureEngine:
             for i in range(1, n):
                 if prices[i - 1] > 0:
                     returns.append(prices[i] / prices[i - 1] - 1.0)
-            if returns:
+            if len(returns) >= 2:
                 mean_ret = sum(returns) / len(returns)
-                variance = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
+                variance = sum((r - mean_ret) ** 2 for r in returns) / (len(returns) - 1)
                 volatility = variance**0.5
 
         # Trade rate (trades per second over window)

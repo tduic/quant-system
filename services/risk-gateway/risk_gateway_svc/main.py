@@ -265,13 +265,24 @@ async def main() -> None:
                     "portfolio_drawdown",
                     1.0 - (state.current_equity / state.peak_equity) if state.peak_equity > 0 else 0.0,
                 )
-                # Create order from signal
+                # Choose order type based on signal urgency:
+                #   urgency >= 0.8 → MARKET (taker, higher fees, immediate fill)
+                #   urgency <  0.8 → LIMIT  (maker, lower fees, may not fill)
+                if sig.urgency >= 0.8:
+                    order_type = "MARKET"
+                    limit_price = None
+                else:
+                    order_type = "LIMIT"
+                    # Place limit at the current mid price (aggressive limit)
+                    limit_price = sig.mid_price_at_signal
+
                 order = Order(
                     timestamp=now_ms(),
                     symbol=sig.symbol,
                     side=sig.side,
-                    order_type="MARKET",
+                    order_type=order_type,
                     quantity=decision.adjusted_quantity,
+                    limit_price=limit_price,
                     signal_id=sig.signal_id,
                     strategy_id=sig.strategy_id,
                     backtest_id=config.backtest_id,
@@ -293,11 +304,13 @@ async def main() -> None:
                     },
                 )
                 logger.info(
-                    "APPROVED: %s %s %.6f %s",
+                    "APPROVED: %s %s %.6f %s [%s, urgency=%.2f]",
                     order.side,
                     order.symbol,
                     order.quantity,
                     order.strategy_id,
+                    order.order_type,
+                    sig.urgency,
                 )
             else:
                 rejected_count += 1

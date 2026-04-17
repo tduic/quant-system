@@ -83,18 +83,20 @@ async def main() -> None:
         )
         registry.register(strategy)
 
-    # Pairs trading strategies for each unique pair
-    if len(symbols_upper) >= 2:
-        for i in range(len(symbols_upper)):
-            for j in range(i + 1, len(symbols_upper)):
-                sym_a, sym_b = symbols_upper[i], symbols_upper[j]
-                pairs_strat = PairsTradingStrategy(
-                    strategy_id=f"pairs_{sym_a.lower()}_{sym_b.lower()}",
-                    symbol=sym_a,
-                    symbol_b=sym_b,
-                    cross_asset_tracker=cross_asset,
-                )
-                registry.register(pairs_strat)
+    # Pairs trading strategies disabled — correlation too unstable in crypto
+    # to generate reliable signals. Revisit with higher min_correlation (0.8+)
+    # and proper cointegration testing.
+    # if len(symbols_upper) >= 2:
+    #     for i in range(len(symbols_upper)):
+    #         for j in range(i + 1, len(symbols_upper)):
+    #             sym_a, sym_b = symbols_upper[i], symbols_upper[j]
+    #             pairs_strat = PairsTradingStrategy(
+    #                 strategy_id=f"pairs_{sym_a.lower()}_{sym_b.lower()}",
+    #                 symbol=sym_a,
+    #                 symbol_b=sym_b,
+    #                 cross_asset_tracker=cross_asset,
+    #             )
+    #             registry.register(pairs_strat)
 
     # --- Counters ---
     trade_count = 0
