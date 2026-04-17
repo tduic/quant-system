@@ -53,11 +53,22 @@ class EvaluatorConfig:
 # Metrics computation from fills
 # ---------------------------------------------------------------------------
 
-# Sharpe is computed on hourly equity returns, annualized by sqrt(365*24).
-# Per-fill returns with sqrt(365) is mathematically invalid — it treats each
-# fill as a "day" and inflates volatility proportional to trade frequency.
-HOURS_PER_YEAR = 365.0 * 24.0
-BUCKET_MS = 60 * 60 * 1000  # 1 hour in milliseconds
+# Sharpe is computed on time-bucketed equity returns. Bucket size auto-scales
+# to the data span so short backtests still produce a meaningful Sharpe.
+# Per-fill returns with a fixed annualization factor is mathematically invalid —
+# it inflates volatility proportional to trade frequency.
+MS_PER_YEAR = 365.0 * 24.0 * 60.0 * 60.0 * 1000.0
+HOUR_MS = 60 * 60 * 1000
+MINUTE_MS = 60 * 1000
+
+
+def _pick_bucket_ms(span_ms: int) -> int:
+    """Pick a bucketing interval that yields at least ~24 buckets across span."""
+    if span_ms >= 48 * HOUR_MS:
+        return HOUR_MS  # 48h+ of data → hourly
+    if span_ms >= 2 * HOUR_MS:
+        return 5 * MINUTE_MS  # 2h–48h → 5-minute buckets
+    return MINUTE_MS  # shorter windows → per-minute
 
 
 def _compute_metrics_from_fills(
@@ -90,7 +101,13 @@ def _compute_metrics_from_fills(
     peak = initial_equity
     max_dd = 0.0
 
-    # Hourly equity snapshots for Sharpe calculation
+    # Pick bucket size based on data span
+    ts_min = min(f.timestamp for f in fills if f.timestamp > 0) if fills else 0
+    ts_max = max(f.timestamp for f in fills if f.timestamp > 0) if fills else 0
+    span_ms = max(1, ts_max - ts_min)
+    bucket_ms = _pick_bucket_ms(span_ms)
+
+    # Bucketed equity snapshots for Sharpe calculation
     bucket_equity: dict[int, float] = {}
 
     for f in fills:
@@ -128,28 +145,29 @@ def _compute_metrics_from_fills(
             dd = (peak - equity) / peak
             max_dd = max(max_dd, dd)
 
-        # Record latest equity in the fill's hourly bucket
-        bucket = f.timestamp // BUCKET_MS if f.timestamp > 0 else 0
+        # Record latest equity in the fill's time bucket
+        bucket = f.timestamp // bucket_ms if f.timestamp > 0 else 0
         bucket_equity[bucket] = equity
 
-    # Hourly returns for Sharpe
+    # Bucketed returns for Sharpe
     sharpe = 0.0
     if len(bucket_equity) >= 2:
         buckets = sorted(bucket_equity.keys())
-        hourly_returns: list[float] = []
+        bucket_returns: list[float] = []
         prev = initial_equity
         for b in buckets:
             e = bucket_equity[b]
             if prev > 0:
-                hourly_returns.append((e - prev) / prev)
+                bucket_returns.append((e - prev) / prev)
             prev = e
 
-        if len(hourly_returns) >= 2:
-            mean_r = sum(hourly_returns) / len(hourly_returns)
-            var_r = sum((r - mean_r) ** 2 for r in hourly_returns) / (len(hourly_returns) - 1)
+        if len(bucket_returns) >= 2:
+            mean_r = sum(bucket_returns) / len(bucket_returns)
+            var_r = sum((r - mean_r) ** 2 for r in bucket_returns) / (len(bucket_returns) - 1)
             std_r = var_r**0.5
             if std_r > 0:
-                sharpe = (mean_r / std_r) * math.sqrt(HOURS_PER_YEAR)
+                # Annualize: buckets_per_year = MS_PER_YEAR / bucket_ms
+                sharpe = (mean_r / std_r) * math.sqrt(MS_PER_YEAR / bucket_ms)
 
     total_return = (equity - initial_equity) / initial_equity if initial_equity > 0 else 0.0
 

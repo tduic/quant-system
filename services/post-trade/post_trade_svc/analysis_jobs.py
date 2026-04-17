@@ -226,20 +226,24 @@ def _make_trades(params: dict[str, Any], *, strategy: str = "mean_reversion") ->
 
     rng = random.Random(seed)
 
+    # Spread trades across a realistic multi-day window so Sharpe (hourly
+    # bucketed) has enough buckets to be meaningful. 7 days default.
+    span_ms = int(params.get("span_ms", 7 * 24 * 60 * 60 * 1000))
+    start_ts = 1_700_000_000_000  # arbitrary Unix ms
+    dt_ms = max(1, span_ms // max(n, 1))
+
     if strategy == "pairs_trading":
         # Generate two correlated price series
         price_a = 50000.0
         price_b = 3500.0
         trades = []
         for i in range(n):
-            # Correlated random walk — shared shock + independent noise
             shared = rng.gauss(0, 30)
             price_a += shared + rng.gauss(0, 20) - (price_a - 50000) * 0.001
             price_b += shared * 0.07 + rng.gauss(0, 1.5) - (price_b - 3500) * 0.001
             price_a = max(price_a, 100)
             price_b = max(price_b, 10)
-            ts = 1_000_000 + i * 1000
-            # Interleave trades for both symbols
+            ts = start_ts + i * dt_ms
             trades.append(
                 {
                     "symbol": symbol_a,
@@ -254,7 +258,7 @@ def _make_trades(params: dict[str, Any], *, strategy: str = "mean_reversion") ->
                     "symbol": symbol_b,
                     "price": round(price_b, 2),
                     "quantity": round(rng.uniform(0.01, 1.0), 4),
-                    "timestamp_exchange": ts + 500,
+                    "timestamp_exchange": ts + dt_ms // 2,
                     "is_buyer_maker": rng.random() > 0.5,
                 }
             )
@@ -271,7 +275,7 @@ def _make_trades(params: dict[str, Any], *, strategy: str = "mean_reversion") ->
                 "symbol": symbol_a,
                 "price": round(price, 2),
                 "quantity": round(rng.uniform(0.001, 0.1), 4),
-                "timestamp_exchange": 1_000_000 + i * 1000,
+                "timestamp_exchange": start_ts + i * dt_ms,
                 "is_buyer_maker": rng.random() > 0.5,
             }
         )
