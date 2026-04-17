@@ -13,6 +13,7 @@ from risk_gateway_svc.risk_checks import (
     check_position_size,
     check_total_exposure,
     check_var,
+    drawdown_scale_factor,
     run_risk_checks,
 )
 
@@ -211,3 +212,58 @@ class TestCheckTotalExposure:
         # Existing: 80000 + 30000 + 15000 = 125000, plus 40000 = 165000 < 200000
         result = check_total_exposure(signal, state, limits, latest_prices=prices)
         assert result is None
+
+
+class TestDrawdownScaleFactor:
+    def test_no_drawdown_full_size(self):
+        state = PortfolioState(positions={}, peak_equity=100_000, current_equity=100_000)
+        assert drawdown_scale_factor(state, RiskLimits()) == 1.0
+
+    def test_small_drawdown_full_size(self):
+        """Under 3% drawdown → no scaling."""
+        state = PortfolioState(positions={}, peak_equity=100_000, current_equity=98_000)
+        assert drawdown_scale_factor(state, RiskLimits()) == 1.0
+
+    def test_moderate_drawdown_scales_down(self):
+        """Between 3% and 7% drawdown → linearly scale from 1.0 to 0.25."""
+        state = PortfolioState(positions={}, peak_equity=100_000, current_equity=95_000)
+        scale = drawdown_scale_factor(state, RiskLimits())
+        assert 0.25 < scale < 1.0
+        # At 5% drawdown: 1.0 - (0.05 - 0.03) / 0.04 * 0.75 = 1.0 - 0.375 = 0.625
+        assert scale == pytest.approx(0.625)
+
+    def test_at_3pct_boundary(self):
+        state = PortfolioState(positions={}, peak_equity=100_000, current_equity=97_000)
+        assert drawdown_scale_factor(state, RiskLimits()) == 1.0
+
+    def test_at_7pct_boundary(self):
+        state = PortfolioState(positions={}, peak_equity=100_000, current_equity=93_000)
+        assert drawdown_scale_factor(state, RiskLimits()) == pytest.approx(0.25)
+
+    def test_deep_drawdown_minimum_size(self):
+        """Between 7% and 10% drawdown → fixed 0.25x."""
+        state = PortfolioState(positions={}, peak_equity=100_000, current_equity=92_000)
+        assert drawdown_scale_factor(state, RiskLimits()) == 0.25
+
+    def test_zero_peak_equity_full_size(self):
+        state = PortfolioState(positions={}, peak_equity=0, current_equity=0)
+        assert drawdown_scale_factor(state, RiskLimits()) == 1.0
+
+    def test_run_risk_checks_applies_scale(self):
+        """run_risk_checks should multiply quantity by drawdown scale factor."""
+        signal = Signal(
+            strategy_id="test",
+            symbol="BTCUSD",
+            side="BUY",
+            strength=0.8,
+            target_quantity=1.0,
+            mid_price_at_signal=100.0,
+            spread_at_signal=1.0,
+        )
+        # 5% drawdown → scale = 0.625
+        state = PortfolioState(positions={}, peak_equity=100_000, current_equity=95_000)
+        limits = RiskLimits(max_drawdown_pct=0.10)
+        decision = run_risk_checks(signal, state, limits)
+        assert decision.decision == "APPROVED"
+        assert decision.adjusted_quantity == pytest.approx(0.625)
+        assert "scaled_by_drawdown" in decision.reason

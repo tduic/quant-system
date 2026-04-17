@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from alpha_engine_svc.strategies.mean_reversion import DEFAULT_PARAMS, MeanReversionStrategy
-from quant_core.models import DepthUpdate, Trade
+from quant_core.models import DepthUpdate, Signal, Trade
 
 
 @pytest.fixture
@@ -15,8 +15,11 @@ def strategy() -> MeanReversionStrategy:
             "window_size": 20,
             "threshold_std": 2.0,
             "warmup_trades": 10,
-            "base_quantity": 0.001,
             "cooldown_trades": 0,  # no cooldown for testing
+            "target_risk_usd": 15.0,
+            "max_notional_usd": 500.0,
+            "min_notional_usd": 5.0,
+            "holding_period_trades": 30,
         }
     )
 
@@ -88,7 +91,6 @@ class TestCooldown:
                 "window_size": 20,
                 "threshold_std": 2.0,
                 "warmup_trades": 10,
-                "base_quantity": 0.001,
                 "cooldown_trades": 5,
             }
         )
@@ -153,3 +155,120 @@ class TestParams:
         s = MeanReversionStrategy(params={"window_size": 50})
         assert s.params["window_size"] == 50
         assert s.params["warmup_trades"] == DEFAULT_PARAMS["warmup_trades"]
+
+
+def _build_strategy_with_signal(
+    base_price: float,
+    spike_price: float,
+    target_risk: float = 15.0,
+    max_notional: float = 500.0,
+    min_notional: float = 5.0,
+) -> tuple[MeanReversionStrategy, Signal | None]:
+    """Helper: build a strategy, warm it up with variance, then spike the price."""
+    strategy = MeanReversionStrategy(
+        params={
+            "window_size": 20,
+            "threshold_std": 2.0,
+            "warmup_trades": 10,
+            "cooldown_trades": 0,
+            "target_risk_usd": target_risk,
+            "max_notional_usd": max_notional,
+            "min_notional_usd": min_notional,
+            "holding_period_trades": 30,
+        }
+    )
+    # Set mid price via book update
+    strategy.on_book_update(
+        DepthUpdate(
+            symbol="BTCUSD",
+            bids=[[base_price - 0.5, 1.0]],
+            asks=[[base_price + 0.5, 1.0]],
+        )
+    )
+    # Warmup with some variance so volatility > 0
+    for i in range(18):
+        offset = (i % 3 - 1) * base_price * 0.001  # ±0.1% jitter
+        strategy.on_trade(make_trade(base_price + offset, i * 1000))
+
+    signal = strategy.on_trade(make_trade(spike_price, 20000))
+    return strategy, signal
+
+
+class TestVolatilityScaledSizing:
+    def test_signal_quantity_is_not_fixed(self):
+        """Quantity should vary based on price and volatility, not be hardcoded."""
+        _, sig_btc = _build_strategy_with_signal(75000.0, 60000.0)
+        assert sig_btc is not None
+        assert sig_btc.target_quantity != 0.001  # not the old hardcoded value
+
+    def test_quantity_scales_with_price(self):
+        """Cheaper assets should get more units for the same dollar risk."""
+        _, sig_expensive = _build_strategy_with_signal(75000.0, 60000.0)
+        _, sig_cheap = _build_strategy_with_signal(88.0, 70.0)
+        assert sig_expensive is not None
+        assert sig_cheap is not None
+        # Cheap asset should have more units
+        assert sig_cheap.target_quantity > sig_expensive.target_quantity
+
+    def test_notional_capped(self):
+        """Trade notional should not exceed max_notional_usd."""
+        _, signal = _build_strategy_with_signal(100.0, 80.0, max_notional=50.0)
+        assert signal is not None
+        notional = signal.target_quantity * signal.mid_price_at_signal
+        assert notional <= 50.0 + 0.01  # small float tolerance
+
+    def test_notional_floored(self):
+        """Trade notional should not go below min_notional_usd."""
+        _, signal = _build_strategy_with_signal(100.0, 80.0, min_notional=200.0, max_notional=1000.0)
+        assert signal is not None
+        notional = signal.target_quantity * signal.mid_price_at_signal
+        assert notional >= 200.0 - 0.01
+
+    def test_higher_vol_means_smaller_quantity(self):
+        """When volatility is higher, quantity should decrease (same risk budget)."""
+        # Low-vol strategy: tight jitter
+        s_low = MeanReversionStrategy(
+            params={
+                "window_size": 20,
+                "threshold_std": 2.0,
+                "warmup_trades": 10,
+                "cooldown_trades": 0,
+                "target_risk_usd": 15.0,
+                "max_notional_usd": 10000.0,  # high cap so it doesn't bind
+                "min_notional_usd": 0.01,
+                "holding_period_trades": 30,
+            }
+        )
+        s_low.on_book_update(DepthUpdate(symbol="BTCUSD", bids=[[99.5, 1.0]], asks=[[100.5, 1.0]]))
+        for i in range(18):
+            s_low.on_trade(make_trade(100.0 + (i % 2) * 0.01, i * 1000))  # tiny jitter
+        sig_low = s_low.on_trade(make_trade(80.0, 20000))
+
+        # High-vol strategy: wide jitter
+        s_high = MeanReversionStrategy(
+            params={
+                "window_size": 20,
+                "threshold_std": 2.0,
+                "warmup_trades": 10,
+                "cooldown_trades": 0,
+                "target_risk_usd": 15.0,
+                "max_notional_usd": 10000.0,
+                "min_notional_usd": 0.01,
+                "holding_period_trades": 30,
+            }
+        )
+        s_high.on_book_update(DepthUpdate(symbol="BTCUSD", bids=[[99.5, 1.0]], asks=[[100.5, 1.0]]))
+        for i in range(18):
+            s_high.on_trade(make_trade(100.0 + (i % 2) * 5.0, i * 1000))  # big jitter
+        sig_high = s_high.on_trade(make_trade(80.0, 20000))
+
+        assert sig_low is not None
+        assert sig_high is not None
+        assert sig_low.target_quantity > sig_high.target_quantity
+
+    def test_metadata_includes_notional(self):
+        """Signal metadata should include the computed notional for auditability."""
+        _, signal = _build_strategy_with_signal(100.0, 80.0)
+        assert signal is not None
+        assert "notional_usd" in signal.metadata
+        assert signal.metadata["notional_usd"] > 0
