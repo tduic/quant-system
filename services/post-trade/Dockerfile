@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/post-trade/post_trade_svc/ /app/post_trade_svc/
 COPY services/backtest/backtest_svc/ /app/backtest/backtest_svc/
+# Backtest evaluator imports live strategy code from alpha-engine and execution
+COPY services/alpha-engine/alpha_engine_svc/ /app/alpha_engine_svc/
+COPY services/execution/execution_svc/ /app/execution_svc/
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
