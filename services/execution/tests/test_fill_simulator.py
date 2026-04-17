@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 
 from execution_svc.fill_simulator import (
-    DEFAULT_FEE_RATE,
     FillSimulator,
     brownian_bridge_sample,
     coinbase_fee_rate,
