@@ -16,6 +16,7 @@ generating any signals to avoid trading on insufficient data.
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any
 
 from alpha_engine_svc.feature_engine import FeatureEngine
@@ -28,8 +29,16 @@ DEFAULT_PARAMS = {
     "window_size": 200,  # number of trades in rolling window
     "threshold_std": 2.5,  # z-score threshold to trigger signal
     "warmup_trades": 100,  # minimum trades before generating signals
-    "base_quantity": 0.001,  # base order size in base asset
     "cooldown_trades": 30,  # minimum trades between signals
+    # Volatility-scaled position sizing:
+    #   quantity = target_risk_usd / (price * volatility * sqrt(holding_period_trades))
+    # This normalizes expected dollar P&L variance across assets.
+    # During low-vol periods, sizes up (more notional, same risk).
+    # During high-vol periods, sizes down (less notional, same risk).
+    "target_risk_usd": 15.0,  # target dollar risk per trade
+    "max_notional_usd": 500.0,  # hard cap on trade notional
+    "min_notional_usd": 10.0,  # floor to avoid dust orders
+    "holding_period_trades": 30,  # expected trades until exit (for vol scaling)
 }
 
 
@@ -113,6 +122,25 @@ class MeanReversionStrategy(BaseStrategy):
         self._last_signal_side = side
         self._trades_since_last_signal = 0
 
+        # --- Volatility-scaled position sizing ---
+        # quantity = target_risk / (price * vol * sqrt(holding_period))
+        # This gives each trade roughly equal expected dollar P&L variance,
+        # regardless of whether we're trading $75K BTC or $88 SOL.
+        price = self._mid_price or trade.price
+        holding_vol = features.volatility * math.sqrt(self.params["holding_period_trades"])
+
+        if holding_vol > 0 and price > 0:
+            quantity = self.params["target_risk_usd"] / (price * holding_vol)
+            # Clamp by notional bounds
+            notional = quantity * price
+            if notional > self.params["max_notional_usd"]:
+                quantity = self.params["max_notional_usd"] / price
+            elif notional < self.params["min_notional_usd"]:
+                quantity = self.params["min_notional_usd"] / price
+        else:
+            # Fallback: $100 notional if vol not available
+            quantity = 100.0 / price if price > 0 else 0.001
+
         # Urgency determines order type (LIMIT vs MARKET):
         #   z near threshold (2.5-3.5) → low urgency → LIMIT (maker fee)
         #   z far from threshold (>3.5) → high urgency → MARKET (taker fee)
@@ -126,15 +154,16 @@ class MeanReversionStrategy(BaseStrategy):
             symbol=self.symbol,
             side=side,
             strength=strength,
-            target_quantity=self.params["base_quantity"],
+            target_quantity=round(quantity, 8),
             urgency=urgency,
-            mid_price_at_signal=self._mid_price or trade.price,
+            mid_price_at_signal=price,
             spread_at_signal=self._spread or 0.0,
             metadata={
                 "z_score": round(z_score, 4),
                 "vwap": round(features.vwap, 2),
                 "volatility": round(features.volatility, 8),
                 "trade_rate": round(features.trade_rate, 2),
+                "notional_usd": round(quantity * price, 2),
             },
         )
 
