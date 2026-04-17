@@ -151,6 +151,36 @@ def create_app(state: PostTradeState) -> FastAPI:
         """List historical backtest runs that have trade data available."""
         return {"backtests": _list_historical_backtests()}
 
+    @app.get("/api/analysis/db-symbols")
+    def list_db_symbols():
+        """List symbols in TimescaleDB with their trade counts and date range."""
+        import os
+
+        import psycopg2
+
+        dsn = os.getenv("DATABASE_URL", "postgresql://quant:quant_dev@timescaledb:5432/quantdb")
+        with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT symbol, count(*), "
+                "extract(epoch from min(time)) * 1000, "
+                "extract(epoch from max(time)) * 1000 "
+                "FROM trades "
+                "WHERE backtest_id IS NULL "
+                "GROUP BY symbol ORDER BY count(*) DESC"
+            )
+            rows = cur.fetchall()
+        return {
+            "symbols": [
+                {
+                    "symbol": r[0],
+                    "count": int(r[1]),
+                    "start_ms": int(r[2]),
+                    "end_ms": int(r[3]),
+                }
+                for r in rows
+            ]
+        }
+
     @app.get("/api/analysis/jobs")
     def list_jobs(limit: int = Query(20)):
         """List recent analysis jobs."""

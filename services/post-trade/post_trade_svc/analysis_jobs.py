@@ -117,6 +117,64 @@ class JobStore:
 # the post-trade service startable without the backtest package installed.
 
 
+def _load_db_trades(
+    symbol: str,
+    start_ms: int | None = None,
+    end_ms: int | None = None,
+    limit: int = 50_000,
+) -> list[dict]:
+    """Load historical trades directly from TimescaleDB.
+
+    Returns trades sorted by timestamp ascending, as dicts matching the
+    shape expected by the evaluator (symbol, price, quantity,
+    timestamp_exchange in ms, is_buyer_maker).
+    """
+    import os
+
+    import psycopg2  # type: ignore[import-not-found]
+    import psycopg2.extras  # type: ignore[import-not-found]
+
+    dsn = os.getenv("DATABASE_URL", "postgresql://quant:quant_dev@timescaledb:5432/quantdb")
+
+    where = ["symbol = %s", "backtest_id IS NULL"]
+    args: list = [symbol]
+    if start_ms is not None:
+        where.append("time >= to_timestamp(%s / 1000.0)")
+        args.append(start_ms)
+    if end_ms is not None:
+        where.append("time <= to_timestamp(%s / 1000.0)")
+        args.append(end_ms)
+
+    query = (
+        "SELECT extract(epoch from time) * 1000 AS ts_ms, "
+        "price::float8 AS price, quantity::float8 AS quantity, "
+        "is_buyer_maker, trade_id "
+        "FROM trades "
+        f"WHERE {' AND '.join(where)} "
+        "ORDER BY time ASC "
+        "LIMIT %s"
+    )
+    args.append(limit)
+
+    with psycopg2.connect(dsn) as conn, conn.cursor() as cur:
+        cur.execute(query, args)
+        rows = cur.fetchall()
+
+    trades = [
+        {
+            "symbol": symbol,
+            "price": float(row[1]),
+            "quantity": float(row[2]),
+            "timestamp_exchange": int(row[0]),
+            "is_buyer_maker": bool(row[3]),
+            "trade_id": int(row[4]) if row[4] is not None else 0,
+        }
+        for row in rows
+    ]
+    logger.info("Loaded %d trades from database for %s", len(trades), symbol)
+    return trades
+
+
 def _load_historical_trades(backtest_id: str) -> list[dict]:
     """Load trades from a historical backtest run's trade file.
 
@@ -221,7 +279,7 @@ def _make_trades(params: dict[str, Any], *, strategy: str = "mean_reversion") ->
 
     symbol_a = params.get("symbol", "BTCUSD")
     symbol_b = params.get("symbol_b", "ETHUSD")
-    # Default 5000 trades — walk-forward with 5 splits × 70/30 gives
+    # Default 5000 trades — walk-forward with 5 splits x 70/30 gives
     # ~700 train / 300 test per fold, well above the strategy's warmup
     # period (100 trades) so test folds actually generate signals.
     n = int(params.get("num_trades", 5000))
@@ -314,10 +372,21 @@ def _execute_analysis(
     strategy = params.get("strategy", "mean_reversion")
     symbol = params.get("symbol", "BTCUSD")
 
-    # Data source: "historical" loads from a previous backtest run,
-    # "generated" (default) creates synthetic data.
+    # Data source:
+    #   "database"   → real trades from TimescaleDB (best — has real edge/no-edge)
+    #   "historical" → trades from a prior backtest run's JSONL file
+    #   "generated"  → synthetic random walk (default fallback, no edge exists)
     data_source = params.get("data_source", "generated")
-    if data_source == "historical":
+    if data_source == "database":
+        start_ms = params.get("start_ms")
+        end_ms = params.get("end_ms")
+        limit = int(params.get("db_limit", 50_000))
+        trades = _load_db_trades(symbol, start_ms=start_ms, end_ms=end_ms, limit=limit)
+        if not trades:
+            msg = f"No trades found in database for {symbol} in the given range"
+            raise ValueError(msg)
+        logger.info("Using %d DB trades for %s", len(trades), symbol)
+    elif data_source == "historical":
         backtest_id = params.get("backtest_id")
         if not backtest_id:
             msg = "backtest_id is required when data_source is 'historical'"
