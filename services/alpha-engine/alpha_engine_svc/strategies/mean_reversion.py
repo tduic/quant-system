@@ -138,8 +138,12 @@ class MeanReversionStrategy(BaseStrategy):
             elif notional < self.params["min_notional_usd"]:
                 quantity = self.params["min_notional_usd"] / price
         else:
-            # Fallback: $100 notional if vol not available
-            quantity = 100.0 / price if price > 0 else 0.001
+            # Fallback: min_notional if vol not available (should be rare after warmup)
+            if price > 0:
+                quantity = self.params["min_notional_usd"] / price
+            else:
+                logger.warning("Price is 0 for %s, skipping signal", self.symbol)
+                return None
 
         # Urgency determines order type (LIMIT vs MARKET):
         #   z near threshold (2.5-3.5) → low urgency → LIMIT (maker fee)

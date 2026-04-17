@@ -10,7 +10,7 @@ from risk_gateway_svc.risk_checks import (
     RiskLimits,
     check_drawdown,
     check_order_notional,
-    check_position_size,
+    check_position_notional,
     check_total_exposure,
     check_var,
     drawdown_scale_factor,
@@ -21,7 +21,7 @@ from risk_gateway_svc.risk_checks import (
 @pytest.fixture
 def limits() -> RiskLimits:
     return RiskLimits(
-        max_position_size=1.0,
+        max_position_notional=100_000.0,
         max_order_notional=100_000.0,
         max_drawdown_pct=0.05,
     )
@@ -49,27 +49,61 @@ def signal() -> Signal:
     )
 
 
-class TestCheckPositionSize:
+class TestCheckPositionNotional:
     def test_within_limit_passes(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
-        assert check_position_size(signal, flat_state, limits) is None
+        # 0.5 BTC @ $80K = $40K < $100K limit
+        assert check_position_notional(signal, flat_state, limits) is None
 
     def test_exceeds_limit_fails(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
-        signal.target_quantity = 1.5  # exceeds max_position_size=1.0
-        result = check_position_size(signal, flat_state, limits)
+        signal.target_quantity = 2.0  # 2.0 * 80000 = $160K > $100K
+        result = check_position_notional(signal, flat_state, limits)
         assert result is not None
-        assert "position_size" in result
+        assert "position_notional" in result
 
     def test_existing_position_considered(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
-        flat_state.positions["BTCUSD"] = 0.8
-        signal.target_quantity = 0.3  # 0.8 + 0.3 = 1.1 > 1.0
-        result = check_position_size(signal, flat_state, limits)
+        flat_state.positions["BTCUSD"] = 1.0  # existing $80K
+        signal.target_quantity = 0.5  # adds $40K → $120K > $100K
+        result = check_position_notional(signal, flat_state, limits)
         assert result is not None
 
     def test_reducing_position_passes(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
-        flat_state.positions["BTCUSD"] = 0.8
-        signal.target_quantity = -0.3  # 0.8 - 0.3 = 0.5, within limit
-        result = check_position_size(signal, flat_state, limits)
+        flat_state.positions["BTCUSD"] = 1.0  # existing $80K
+        signal.target_quantity = -0.5  # reduces to $40K < $100K
+        result = check_position_notional(signal, flat_state, limits)
         assert result is None
+
+    def test_sol_large_quantity_passes_when_notional_within_limit(self):
+        """SOL can be 5+ units per trade — should pass if notional is within limit."""
+        sol_signal = Signal(
+            strategy_id="test",
+            symbol="SOLUSD",
+            side="BUY",
+            strength=0.8,
+            target_quantity=5.0,  # 5 SOL
+            mid_price_at_signal=88.0,  # $88 each
+            spread_at_signal=0.1,
+        )
+        state = PortfolioState(positions={}, peak_equity=100_000, current_equity=100_000)
+        limits = RiskLimits(max_position_notional=10_000.0)
+        # 5.0 * $88 = $440 < $10K → should pass
+        assert check_position_notional(sol_signal, state, limits) is None
+
+    def test_btc_small_quantity_rejected_when_notional_exceeds(self):
+        """Even small BTC quantities can exceed notional limits."""
+        btc_signal = Signal(
+            strategy_id="test",
+            symbol="BTCUSD",
+            side="BUY",
+            strength=0.8,
+            target_quantity=0.01,  # 0.01 BTC
+            mid_price_at_signal=75_000.0,
+            spread_at_signal=1.0,
+        )
+        state = PortfolioState(positions={}, peak_equity=100_000, current_equity=100_000)
+        limits = RiskLimits(max_position_notional=500.0)
+        # 0.01 * $75K = $750 > $500 → should reject
+        result = check_position_notional(btc_signal, state, limits)
+        assert result is not None
 
 
 class TestCheckOrderNotional:
@@ -107,7 +141,7 @@ class TestRunRiskChecks:
     def test_all_pass_approved(self, signal: Signal, flat_state: PortfolioState, limits: RiskLimits):
         decision = run_risk_checks(signal, flat_state, limits)
         assert decision.decision == "APPROVED"
-        assert len(decision.checks_passed) == 5  # position, notional, drawdown, var, total_exposure
+        assert len(decision.checks_passed) == 5  # position_notional, order_notional, drawdown, var, total_exposure
         assert len(decision.checks_failed) == 0
         assert decision.adjusted_quantity == signal.target_quantity
 

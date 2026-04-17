@@ -46,8 +46,8 @@ SERVICE_NAME = "risk-gateway"
 def _load_risk_limits() -> RiskLimits:
     """Load risk limits from environment variables."""
     return RiskLimits(
-        max_position_size=float(os.getenv("MAX_POSITION_SIZE", "1.0")),
-        max_order_notional=float(os.getenv("MAX_ORDER_NOTIONAL", "100000")),
+        max_position_notional=float(os.getenv("MAX_POSITION_NOTIONAL", "10000")),
+        max_order_notional=float(os.getenv("MAX_ORDER_NOTIONAL", "1000")),
         max_drawdown_pct=float(os.getenv("MAX_DRAWDOWN_PCT", "0.05")),
         max_total_exposure=float(os.getenv("MAX_TOTAL_EXPOSURE", "500000")),
     )
@@ -110,8 +110,8 @@ async def main() -> None:
     # --- Config ---
     limits = _load_risk_limits()
     logger.info(
-        "Risk limits: pos=%.2f, notional=%.0f, drawdown=%.1f%%",
-        limits.max_position_size,
+        "Risk limits: pos_notional=$%.0f, order_notional=$%.0f, drawdown=%.1f%%",
+        limits.max_position_notional,
         limits.max_order_notional,
         limits.max_drawdown_pct * 100,
     )

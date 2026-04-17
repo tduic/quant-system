@@ -38,19 +38,28 @@ class PortfolioState:
 class RiskLimits:
     """Configurable risk parameters."""
 
-    max_position_size: float = 1.0  # max quantity per symbol
-    max_order_notional: float = 100_000.0  # max single order value in USD
+    max_position_notional: float = 10_000.0  # max notional per symbol in USD
+    max_order_notional: float = 1_000.0  # max single order value in USD
     max_drawdown_pct: float = 0.10  # 10% hard stop drawdown
     max_total_exposure: float = 500_000.0  # max total notional exposure
     max_var_pct: float = 0.02  # max VaR as % of equity (2%)
 
 
-def check_position_size(signal: Signal, state: PortfolioState, limits: RiskLimits) -> str | None:
-    """Returns failure reason, or None if check passes."""
+def check_position_notional(signal: Signal, state: PortfolioState, limits: RiskLimits) -> str | None:
+    """Check that resulting position notional doesn't exceed per-symbol limit.
+
+    Uses the signal's mid_price to convert quantity to USD notional. This works
+    correctly across assets with wildly different unit prices (BTC ~$75K vs SOL ~$88).
+    """
     current_pos = state.positions.get(signal.symbol, 0.0)
     new_pos = current_pos + signal.target_quantity
-    if abs(new_pos) > limits.max_position_size:
-        return f"position_size: resulting position {new_pos:.6f} exceeds limit {limits.max_position_size}"
+    price = signal.mid_price_at_signal
+    new_notional = abs(new_pos) * price if price > 0 else 0.0
+    if new_notional > limits.max_position_notional:
+        return (
+            f"position_notional: resulting ${new_notional:,.0f} "
+            f"({new_pos:.6f} @ ${price:,.0f}) exceeds limit ${limits.max_position_notional:,.0f}"
+        )
     return None
 
 
@@ -143,7 +152,7 @@ def run_risk_checks(
 
     # Run each check
     for check_name, result in [
-        ("position_size", check_position_size(signal, state, limits)),
+        ("position_notional", check_position_notional(signal, state, limits)),
         ("order_notional", check_order_notional(signal, limits)),
         ("drawdown", check_drawdown(state, limits)),
         ("var", check_var(state, limits, var_pct)),
