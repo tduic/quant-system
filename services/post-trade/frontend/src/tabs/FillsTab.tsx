@@ -53,7 +53,7 @@ export function FillsTab({ symbol }: { symbol?: string }) {
                 </tr>
               </thead>
               <tbody>
-                {data.fills.map((fill) => (
+                {[...data.fills].reverse().map((fill) => (
                   <tr
                     key={fill.fill_id}
                     className="border-b border-gray-800/50 hover:bg-gray-900/50"
