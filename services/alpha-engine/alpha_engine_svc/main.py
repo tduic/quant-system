@@ -13,6 +13,7 @@ import signal
 from alpha_engine_svc.cross_asset import CrossAssetTracker
 from alpha_engine_svc.order_book import OrderBook
 from alpha_engine_svc.strategies.mean_reversion import MeanReversionStrategy
+from alpha_engine_svc.strategies.momentum import MomentumStrategy
 from alpha_engine_svc.strategies.pairs_trading import PairsTradingStrategy
 from alpha_engine_svc.strategy import StrategyRegistry
 from quant_core.circuit_breaker import CircuitBreaker
@@ -75,13 +76,22 @@ async def main() -> None:
     registry = StrategyRegistry()
     symbols_upper = [s.upper() for s in config.symbols]
 
-    # Mean-reversion strategy per symbol
+    # Mean-reversion + momentum per symbol — run both so we can see which
+    # regime each asset is in. They trade opposite directions, so one wins
+    # when the other loses (except for fee drag, which hits both).
     for sym in symbols_upper:
-        strategy = MeanReversionStrategy(
-            strategy_id=f"mean_reversion_{sym.lower()}",
-            symbol=sym,
+        registry.register(
+            MeanReversionStrategy(
+                strategy_id=f"mean_reversion_{sym.lower()}",
+                symbol=sym,
+            )
         )
-        registry.register(strategy)
+        registry.register(
+            MomentumStrategy(
+                strategy_id=f"momentum_{sym.lower()}",
+                symbol=sym,
+            )
+        )
 
     # Pairs trading strategies disabled — correlation too unstable in crypto
     # to generate reliable signals. Revisit with higher min_correlation (0.8+)

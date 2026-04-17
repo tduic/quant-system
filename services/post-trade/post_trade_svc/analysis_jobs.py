@@ -431,7 +431,7 @@ def _run_sensitivity(
     from backtest_svc.param_sensitivity import ParamRange, SearchMethod, run_sensitivity
 
     strategy = params.get("strategy", "mean_reversion")
-    if strategy == "mean_reversion":
+    if strategy in ("mean_reversion", "momentum"):
         param_ranges = [
             ParamRange(name="threshold_std", values=[1.0, 1.5, 2.0, 2.5, 3.0]),
             ParamRange(name="window_size", values=[50, 100, 200]),
@@ -487,7 +487,7 @@ def _run_walk_forward(
     from backtest_svc.walk_forward import WalkForwardConfig, WindowType, run_walk_forward
 
     strategy = params.get("strategy", "mean_reversion")
-    if strategy == "mean_reversion":
+    if strategy in ("mean_reversion", "momentum"):
         param_ranges = [
             ParamRange(name="threshold_std", values=[1.5, 2.0, 2.5]),
             ParamRange(name="window_size", values=[50, 100]),

@@ -32,6 +32,7 @@ for _svc in ("alpha-engine", "execution"):
 
 from alpha_engine_svc.cross_asset import CrossAssetTracker  # noqa: E402
 from alpha_engine_svc.strategies.mean_reversion import MeanReversionStrategy  # noqa: E402
+from alpha_engine_svc.strategies.momentum import MomentumStrategy  # noqa: E402
 from alpha_engine_svc.strategies.pairs_trading import PairsTradingStrategy  # noqa: E402
 from execution_svc.fill_simulator import FillSimulator  # noqa: E402
 from quant_core.models import DepthUpdate, Fill, Order, Signal, Trade  # noqa: E402
@@ -293,21 +294,25 @@ class LocalStrategyEvaluator:
         strategy_type = self._config.strategy_type
 
         if strategy_type == "mean_reversion":
-            return self._run_mean_reversion(trades, strategy_params, fee_rate, slippage_bps)
+            return self._run_single_symbol(trades, strategy_params, fee_rate, slippage_bps, MeanReversionStrategy)
+        if strategy_type == "momentum":
+            return self._run_single_symbol(trades, strategy_params, fee_rate, slippage_bps, MomentumStrategy)
         if strategy_type == "pairs_trading":
             return self._run_pairs_trading(trades, strategy_params, fee_rate, slippage_bps)
         return [], []
 
-    def _run_mean_reversion(
+    def _run_single_symbol(
         self,
         trades: list[dict],
         params: dict[str, Any],
         fee_rate: float | None,
         slippage_bps: float,
+        strategy_cls: Any,
     ) -> tuple[list[Signal], list[Fill]]:
-        """Run the live MeanReversionStrategy over historical trades."""
-        strategy = MeanReversionStrategy(
-            strategy_id=f"mean_reversion_{self._config.symbol.lower()}",
+        """Run a single-symbol strategy (MeanReversion or Momentum) over historical trades."""
+        strategy_name = strategy_cls.__name__.replace("Strategy", "").lower()
+        strategy = strategy_cls(
+            strategy_id=f"{strategy_name}_{self._config.symbol.lower()}",
             symbol=self._config.symbol,
             params=params,
         )
