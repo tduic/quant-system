@@ -221,7 +221,10 @@ def _make_trades(params: dict[str, Any], *, strategy: str = "mean_reversion") ->
 
     symbol_a = params.get("symbol", "BTCUSD")
     symbol_b = params.get("symbol_b", "ETHUSD")
-    n = int(params.get("num_trades", 1000))
+    # Default 5000 trades — walk-forward with 5 splits × 70/30 gives
+    # ~700 train / 300 test per fold, well above the strategy's warmup
+    # period (100 trades) so test folds actually generate signals.
+    n = int(params.get("num_trades", 5000))
     seed = params.get("seed", 42)
 
     rng = random.Random(seed)
@@ -431,12 +434,15 @@ def _run_walk_forward(
     param_grid = build_grid(param_ranges)
     window_type = WindowType.EXPANDING if params.get("expanding") else WindowType.ROLLING
 
+    # Mean reversion needs 100 warmup trades before any signals, so both
+    # train and test folds must be meaningfully larger than that to generate
+    # enough fills for a meaningful Sharpe.
     wf_config = WalkForwardConfig(
         n_splits=int(params.get("splits", 5)),
         train_pct=float(params.get("train_pct", 0.7)),
         window_type=window_type,
-        min_train_size=int(params.get("min_train", 50)),
-        min_test_size=int(params.get("min_test", 20)),
+        min_train_size=int(params.get("min_train", 200)),
+        min_test_size=int(params.get("min_test", 200)),
     )
 
     store._update(job_id, progress=40)
