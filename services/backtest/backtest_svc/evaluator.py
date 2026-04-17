@@ -1,14 +1,11 @@
-"""Strategy evaluator — runs a strategy over a trade sequence and returns metrics.
+"""Strategy evaluator — runs the live strategy code over historical trades.
 
 This is the adapter that connects the abstract StrategyEvaluator protocol
 (used by walk-forward, param sensitivity, etc.) to the actual Alpha Engine
-strategies (MeanReversion, PairsTradingStrategy).
+strategies (MeanReversion, PairsTradingStrategy) and Execution service
+fill simulator — so backtests and live trading share the same code path.
 
-It creates a strategy instance, feeds trades through it, simulates fills
-at the trade price (with configurable fee/slippage), and computes
-performance metrics from the resulting PnL stream.
-
-This module has NO external dependencies (no Kafka, no DB, no Redis) —
+This module has NO external service dependencies (no Kafka, no DB, no Redis) —
 it operates entirely on in-memory trade lists, making it suitable for
 fast parameter sweeps.
 """
@@ -17,37 +14,35 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass, field
+import sys
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Lightweight fill simulation (no Kafka/execution service needed)
-# ---------------------------------------------------------------------------
+# Ensure alpha-engine and execution services are importable (for CLI use,
+# not just tests). conftest.py handles this for pytest.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+for _svc in ("alpha-engine", "execution"):
+    _path = str(_PROJECT_ROOT / "services" / _svc)
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
-
-@dataclass
-class SimulatedFill:
-    """A fill produced by the evaluator's simple simulator."""
-
-    timestamp: int = 0
-    symbol: str = ""
-    side: str = ""
-    quantity: float = 0.0
-    fill_price: float = 0.0
-    fee: float = 0.0
-    slippage_bps: float = 0.0
-    strategy_id: str = ""
+from alpha_engine_svc.cross_asset import CrossAssetTracker  # noqa: E402
+from alpha_engine_svc.strategies.mean_reversion import MeanReversionStrategy  # noqa: E402
+from alpha_engine_svc.strategies.pairs_trading import PairsTradingStrategy  # noqa: E402
+from execution_svc.fill_simulator import FillSimulator  # noqa: E402
+from quant_core.models import DepthUpdate, Fill, Order, Signal, Trade  # noqa: E402
 
 
 @dataclass
 class EvaluatorConfig:
     """Configuration for the evaluator."""
 
-    fee_rate: float = 0.006  # default Coinbase taker fee
-    slippage_bps: float = 1.0  # additional slippage in basis points
+    fee_rate: float | None = None  # None → use Coinbase tiered fees (realistic default)
+    slippage_bps: float = 1.0  # additional slippage in basis points (rarely used now)
     initial_equity: float = 100_000.0
     strategy_type: str = "mean_reversion"  # or "pairs_trading"
     symbol: str = "BTCUSD"
@@ -58,15 +53,22 @@ class EvaluatorConfig:
 # Metrics computation from fills
 # ---------------------------------------------------------------------------
 
-ANNUAL_FACTOR = 365.0
+# Sharpe is computed on hourly equity returns, annualized by sqrt(365*24).
+# Per-fill returns with sqrt(365) is mathematically invalid — it treats each
+# fill as a "day" and inflates volatility proportional to trade frequency.
+HOURS_PER_YEAR = 365.0 * 24.0
+BUCKET_MS = 60 * 60 * 1000  # 1 hour in milliseconds
 
 
 def _compute_metrics_from_fills(
-    fills: list[SimulatedFill],
+    fills: list[Fill],
     initial_equity: float,
     signals_emitted: int = 0,
 ) -> dict[str, float]:
-    """Compute Sharpe, return, drawdown, etc. from a list of fills."""
+    """Compute Sharpe, return, drawdown, etc. from a list of fills.
+
+    Sharpe uses hourly equity returns with proper annualization.
+    """
     if not fills:
         return {
             "sharpe": 0.0,
@@ -87,8 +89,9 @@ def _compute_metrics_from_fills(
     equity = initial_equity
     peak = initial_equity
     max_dd = 0.0
-    returns: list[float] = []
-    prev_equity = initial_equity
+
+    # Hourly equity snapshots for Sharpe calculation
+    bucket_equity: dict[int, float] = {}
 
     for f in fills:
         total_fees += f.fee
@@ -125,18 +128,28 @@ def _compute_metrics_from_fills(
             dd = (peak - equity) / peak
             max_dd = max(max_dd, dd)
 
-        if prev_equity > 0:
-            returns.append((equity - prev_equity) / prev_equity)
-        prev_equity = equity
+        # Record latest equity in the fill's hourly bucket
+        bucket = f.timestamp // BUCKET_MS if f.timestamp > 0 else 0
+        bucket_equity[bucket] = equity
 
-    # Sharpe
+    # Hourly returns for Sharpe
     sharpe = 0.0
-    if len(returns) >= 2:
-        mean_r = sum(returns) / len(returns)
-        var_r = sum((r - mean_r) ** 2 for r in returns) / len(returns)
-        std_r = var_r**0.5
-        if std_r > 0:
-            sharpe = (mean_r / std_r) * math.sqrt(ANNUAL_FACTOR)
+    if len(bucket_equity) >= 2:
+        buckets = sorted(bucket_equity.keys())
+        hourly_returns: list[float] = []
+        prev = initial_equity
+        for b in buckets:
+            e = bucket_equity[b]
+            if prev > 0:
+                hourly_returns.append((e - prev) / prev)
+            prev = e
+
+        if len(hourly_returns) >= 2:
+            mean_r = sum(hourly_returns) / len(hourly_returns)
+            var_r = sum((r - mean_r) ** 2 for r in hourly_returns) / (len(hourly_returns) - 1)
+            std_r = var_r**0.5
+            if std_r > 0:
+                sharpe = (mean_r / std_r) * math.sqrt(HOURS_PER_YEAR)
 
     total_return = (equity - initial_equity) / initial_equity if initial_equity > 0 else 0.0
 
@@ -154,39 +167,40 @@ def _compute_metrics_from_fills(
 
 
 # ---------------------------------------------------------------------------
-# Trade dict → Trade model conversion (lightweight, no quant_core import)
+# Helpers
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class _LiteTrade:
-    """Lightweight trade for strategy consumption without importing quant_core."""
-
-    price: float = 0.0
-    quantity: float = 0.0
-    is_buyer_maker: bool = False
-    timestamp_exchange: int = 0
-    timestamp_ingested: int = 0
-    symbol: str = ""
-    trade_id: int = 0
-    type: str = "trade"
-    exchange: str = "coinbase"
+def _dict_to_trade(t: dict, default_symbol: str) -> Trade:
+    """Convert a trade dict (as loaded from storage) into a Trade model."""
+    return Trade(
+        symbol=t.get("symbol", default_symbol),
+        price=float(t.get("price", 0.0)),
+        quantity=float(t.get("quantity", 0.0)),
+        is_buyer_maker=bool(t.get("is_buyer_maker", False)),
+        timestamp_exchange=int(t.get("timestamp_exchange", 0)),
+        timestamp_ingested=int(t.get("timestamp_ingested", 0)),
+    )
 
 
-@dataclass
-class _LiteSignal:
-    """Lightweight signal output."""
-
-    signal_id: str = ""
-    timestamp: int = 0
-    strategy_id: str = ""
-    symbol: str = ""
-    side: str = ""
-    strength: float = 0.0
-    target_quantity: float = 0.0
-    mid_price_at_signal: float = 0.0
-    spread_at_signal: float = 0.0
-    metadata: dict = field(default_factory=dict)
+def _signal_to_order(signal: Signal) -> Order:
+    """Mirror the risk gateway's signal→order logic for backtest consistency."""
+    if signal.urgency >= 0.8:
+        order_type = "MARKET"
+        limit_price = None
+    else:
+        order_type = "LIMIT"
+        limit_price = signal.mid_price_at_signal
+    return Order(
+        timestamp=signal.timestamp,
+        symbol=signal.symbol,
+        side=signal.side,
+        order_type=order_type,
+        quantity=signal.target_quantity,
+        limit_price=limit_price,
+        signal_id=signal.signal_id,
+        strategy_id=signal.strategy_id,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -195,22 +209,18 @@ class _LiteSignal:
 
 
 class LocalStrategyEvaluator:
-    """Evaluates a strategy by replaying trades through it locally.
+    """Evaluates a strategy by replaying trades through the live strategy code.
 
-    Compatible with the StrategyEvaluator protocol expected by
-    walk_forward.run_walk_forward() and param_sensitivity.run_sensitivity().
+    Uses the same MeanReversionStrategy/PairsTradingStrategy and FillSimulator
+    that the alpha engine and execution service run in production. Guarantees
+    backtest and live can never diverge.
 
     Usage:
         evaluator = LocalStrategyEvaluator(config=EvaluatorConfig(
             strategy_type="mean_reversion",
             symbol="BTCUSD",
         ))
-
-        # For walk-forward / param sensitivity:
-        metrics = evaluator.evaluate(trades, {"threshold_std": 2.0, "window_size": 100})
-
-        # For cost sensitivity:
-        metrics = evaluator.evaluate(trades, {"fee_rate": 0.008, "slippage_bps": 5.0})
+        metrics = evaluator.evaluate(trades, {"threshold_std": 2.5})
     """
 
     def __init__(self, config: EvaluatorConfig | None = None):
@@ -225,7 +235,6 @@ class LocalStrategyEvaluator:
 
         The params dict can contain both strategy params (threshold_std,
         window_size, etc.) and cost params (fee_rate, slippage_bps).
-        Strategy params override defaults; cost params override config.
         """
         fee_rate = params.get("fee_rate", self._config.fee_rate)
         slippage_bps = params.get("slippage_bps", self._config.slippage_bps)
@@ -234,7 +243,6 @@ class LocalStrategyEvaluator:
         cost_keys = {"fee_rate", "slippage_bps", "latency_ms"}
         strategy_params = {k: v for k, v in params.items() if k not in cost_keys}
 
-        # Create strategy and run
         signals, fills = self._run_strategy(
             trades=trades,
             strategy_params=strategy_params,
@@ -252,9 +260,9 @@ class LocalStrategyEvaluator:
         self,
         trades: list[dict],
         strategy_params: dict[str, Any],
-        fee_rate: float,
+        fee_rate: float | None,
         slippage_bps: float,
-    ) -> tuple[list[_LiteSignal], list[SimulatedFill]]:
+    ) -> tuple[list[Signal], list[Fill]]:
         """Replay trades through the strategy and collect signals/fills."""
         strategy_type = self._config.strategy_type
 
@@ -262,134 +270,70 @@ class LocalStrategyEvaluator:
             return self._run_mean_reversion(trades, strategy_params, fee_rate, slippage_bps)
         if strategy_type == "pairs_trading":
             return self._run_pairs_trading(trades, strategy_params, fee_rate, slippage_bps)
-        # Generic: just return empty (extensible for future strategies)
         return [], []
 
     def _run_mean_reversion(
         self,
         trades: list[dict],
         params: dict[str, Any],
-        fee_rate: float,
+        fee_rate: float | None,
         slippage_bps: float,
-    ) -> tuple[list[_LiteSignal], list[SimulatedFill]]:
-        """Run mean-reversion strategy over trade dicts."""
-        # Strategy config
-        window_size = int(params.get("window_size", 100))
-        threshold_std = float(params.get("threshold_std", 2.0))
-        warmup_trades = int(params.get("warmup_trades", 50))
-        base_quantity = float(params.get("base_quantity", 0.001))
-        cooldown_trades = int(params.get("cooldown_trades", 10))
+    ) -> tuple[list[Signal], list[Fill]]:
+        """Run the live MeanReversionStrategy over historical trades."""
+        strategy = MeanReversionStrategy(
+            strategy_id=f"mean_reversion_{self._config.symbol.lower()}",
+            symbol=self._config.symbol,
+            params=params,
+        )
+        simulator = FillSimulator(fee_rate=fee_rate)
 
-        # Inline mean-reversion logic (avoids importing quant_core.models
-        # which fails on Python 3.10 sandbox)
-        prices: list[float] = []
-        quantities: list[float] = []
-        pv_sum = 0.0
-        v_sum = 0.0
-
-        trade_count = 0
-        trades_since_signal = cooldown_trades  # start ready
-        last_signal_side: str | None = None
-
-        signals: list[_LiteSignal] = []
-        fills: list[SimulatedFill] = []
+        signals: list[Signal] = []
+        fills: list[Fill] = []
 
         for t in trades:
-            price = float(t.get("price", 0))
-            qty = float(t.get("quantity", 0.001))
-            ts = int(t.get("timestamp_exchange", 0))
-            symbol = t.get("symbol", self._config.symbol)
-
+            price = float(t.get("price", 0.0))
             if price <= 0:
                 continue
 
-            trade_count += 1
-            trades_since_signal += 1
-
-            # Update rolling VWAP and volatility
-            if len(prices) >= window_size:
-                old_p = prices.pop(0)
-                old_q = quantities.pop(0)
-                pv_sum -= old_p * old_q
-                v_sum -= old_q
-
-            prices.append(price)
-            quantities.append(qty)
-            pv_sum += price * qty
-            v_sum += qty
-
-            if trade_count < warmup_trades:
-                continue
-
-            if trades_since_signal < cooldown_trades:
-                continue
-
-            # Compute VWAP
-            vwap = pv_sum / v_sum if v_sum > 0 else 0.0
-            if vwap == 0:
-                continue
-
-            # Compute volatility
-            if len(prices) < 2:
-                continue
-            ret_list = [prices[i] / prices[i - 1] - 1.0 for i in range(1, len(prices)) if prices[i - 1] > 0]
-            if not ret_list:
-                continue
-            mean_ret = sum(ret_list) / len(ret_list)
-            var_ret = sum((r - mean_ret) ** 2 for r in ret_list) / len(ret_list)
-            vol = var_ret**0.5
-            if vol == 0:
-                continue
-
-            z_score = (price - vwap) / vol
-
-            side = None
-            strength = 0.0
-            if z_score < -threshold_std:
-                side = "BUY"
-                strength = min(abs(z_score) / (threshold_std * 2), 1.0)
-            elif z_score > threshold_std:
-                side = "SELL"
-                strength = min(abs(z_score) / (threshold_std * 2), 1.0)
-
-            if side is None:
-                continue
-
-            if side == last_signal_side:
-                continue
-
-            last_signal_side = side
-            trades_since_signal = 0
-
-            sig = _LiteSignal(
-                signal_id=f"sig-{trade_count}",
-                timestamp=ts,
-                strategy_id="mean_reversion_eval",
-                symbol=symbol,
-                side=side,
-                strength=strength,
-                target_quantity=base_quantity,
-                mid_price_at_signal=price,
-            )
-            signals.append(sig)
-
-            # Simulate immediate fill
-            slip = price * slippage_bps / 10_000.0
-            fill_price = price + slip if side == "BUY" else price - slip
-            fee = base_quantity * fill_price * fee_rate
-
-            fills.append(
-                SimulatedFill(
-                    timestamp=ts,
-                    symbol=symbol,
-                    side=side,
-                    quantity=base_quantity,
-                    fill_price=fill_price,
-                    fee=fee,
-                    slippage_bps=slippage_bps,
-                    strategy_id="mean_reversion_eval",
+            # Feed a synthetic book update so the strategy has mid/spread.
+            # Use 1 bps spread as a reasonable default for backtest.
+            half_spread = price * 0.00005  # 0.5 bps each side
+            strategy.on_book_update(
+                DepthUpdate(
+                    symbol=self._config.symbol,
+                    bids=[[price - half_spread, 1.0]],
+                    asks=[[price + half_spread, 1.0]],
                 )
             )
+
+            trade = _dict_to_trade(t, self._config.symbol)
+            signal = strategy.on_trade(trade)
+            if signal is None:
+                continue
+
+            # Backfill the signal timestamp with the trade's historical time
+            # (strategy uses now_ms, but backtest needs the trade's actual time).
+            signal.timestamp = trade.timestamp_exchange
+            signals.append(signal)
+            order = _signal_to_order(signal)
+
+            # Simulate fill at the signal's mid/spread
+            fill = simulator.simulate_fill(
+                order=order,
+                mid_price=signal.mid_price_at_signal,
+                spread=signal.spread_at_signal,
+            )
+            fill.timestamp = trade.timestamp_exchange
+            # Apply extra configured slippage (on top of spread crossing)
+            if slippage_bps > 0:
+                extra_slip = fill.fill_price * slippage_bps / 10_000.0
+                if order.side == "BUY":
+                    fill.fill_price += extra_slip
+                else:
+                    fill.fill_price -= extra_slip
+                fill.slippage_bps += slippage_bps
+
+            fills.append(fill)
 
         return signals, fills
 
@@ -397,146 +341,77 @@ class LocalStrategyEvaluator:
         self,
         trades: list[dict],
         params: dict[str, Any],
-        fee_rate: float,
+        fee_rate: float | None,
         slippage_bps: float,
-    ) -> tuple[list[_LiteSignal], list[SimulatedFill]]:
-        """Run pairs trading strategy over trade dicts.
-
-        Trades must contain both symbol_a and symbol_b data, sorted by timestamp.
-        """
-        entry_threshold = float(params.get("entry_threshold", 2.0))
-        min_correlation = float(params.get("min_correlation", 0.5))
-        warmup_trades = int(params.get("warmup_trades", 30))
-        cooldown_trades = int(params.get("cooldown_trades", 20))
-        base_quantity = float(params.get("base_quantity", 0.001))
-        window = int(params.get("window", 100))
-
+    ) -> tuple[list[Signal], list[Fill]]:
+        """Run the live PairsTradingStrategy over historical trades."""
         symbol_a = self._config.symbol
         symbol_b = self._config.symbol_b
 
-        # Track log prices for spread z-score
-        log_prices_a: list[float] = []
-        log_prices_b: list[float] = []
-        trade_count = 0
-        trades_since_signal = cooldown_trades
+        tracker = CrossAssetTracker(window=int(params.get("window", 200)))
+        strategy = PairsTradingStrategy(
+            strategy_id=f"pairs_{symbol_a.lower()}_{symbol_b.lower()}",
+            symbol=symbol_a,
+            symbol_b=symbol_b,
+            cross_asset_tracker=tracker,
+            params=params,
+        )
+        simulator = FillSimulator(fee_rate=fee_rate)
 
-        signals: list[_LiteSignal] = []
-        fills: list[SimulatedFill] = []
-
+        signals: list[Signal] = []
+        fills: list[Fill] = []
         latest_price: dict[str, float] = {}
 
         for t in trades:
             sym = t.get("symbol", "")
-            price = float(t.get("price", 0))
-            ts = int(t.get("timestamp_exchange", 0))
-
-            if price <= 0:
+            price = float(t.get("price", 0.0))
+            if price <= 0 or sym not in (symbol_a, symbol_b):
                 continue
-
             latest_price[sym] = price
 
+            # Feed book for mid/spread
+            half_spread = price * 0.00005
             if sym == symbol_a:
-                log_prices_a.append(math.log(price))
-                if len(log_prices_a) > window:
-                    log_prices_a.pop(0)
-            elif sym == symbol_b:
-                log_prices_b.append(math.log(price))
-                if len(log_prices_b) > window:
-                    log_prices_b.pop(0)
-            else:
-                continue
-
-            trade_count += 1
-            trades_since_signal += 1
-
-            if trade_count < warmup_trades:
-                continue
-            if trades_since_signal < cooldown_trades:
-                continue
-
-            n = min(len(log_prices_a), len(log_prices_b))
-            if n < 20:
-                continue
-
-            # Compute correlation of log returns
-            a_slice = log_prices_a[-n:]
-            b_slice = log_prices_b[-n:]
-
-            returns_a = [a_slice[i] - a_slice[i - 1] for i in range(1, len(a_slice))]
-            returns_b = [b_slice[i] - b_slice[i - 1] for i in range(1, len(b_slice))]
-
-            corr = _pearson(returns_a, returns_b)
-            if corr < min_correlation:
-                continue
-
-            # Spread z-score on log price ratio
-            spread = [a - b for a, b in zip(a_slice, b_slice, strict=True)]
-            mean_s = sum(spread) / len(spread)
-            var_s = sum((s - mean_s) ** 2 for s in spread) / len(spread)
-            std_s = var_s**0.5
-            if std_s == 0:
-                continue
-
-            z = (spread[-1] - mean_s) / std_s
-
-            if abs(z) < entry_threshold:
-                continue
-
-            # z > threshold → spread is too wide → short A, long B
-            # z < -threshold → spread is too narrow → long A, short B
-            side_a = "SELL" if z > 0 else "BUY"
-            side_b = "BUY" if z > 0 else "SELL"
-            trades_since_signal = 0
-
-            for leg_sym, leg_side in [(symbol_a, side_a), (symbol_b, side_b)]:
-                p = latest_price.get(leg_sym, 0)
-                if p <= 0:
-                    continue
-
-                sig = _LiteSignal(
-                    signal_id=f"sig-{trade_count}-{leg_sym}",
-                    timestamp=ts,
-                    strategy_id="pairs_eval",
-                    symbol=leg_sym,
-                    side=leg_side,
-                    strength=min(abs(z) / (entry_threshold * 2), 1.0),
-                    target_quantity=base_quantity,
-                    mid_price_at_signal=p,
-                )
-                signals.append(sig)
-
-                slip = p * slippage_bps / 10_000.0
-                fp = p + slip if leg_side == "BUY" else p - slip
-                fee = base_quantity * fp * fee_rate
-
-                fills.append(
-                    SimulatedFill(
-                        timestamp=ts,
-                        symbol=leg_sym,
-                        side=leg_side,
-                        quantity=base_quantity,
-                        fill_price=fp,
-                        fee=fee,
-                        slippage_bps=slippage_bps,
-                        strategy_id="pairs_eval",
+                strategy.on_book_update(
+                    DepthUpdate(
+                        symbol=sym,
+                        bids=[[price - half_spread, 1.0]],
+                        asks=[[price + half_spread, 1.0]],
                     )
                 )
+                trade = _dict_to_trade(t, sym)
+                signal = strategy.on_trade(trade)
+            else:
+                # Symbol B trade still feeds the tracker
+                tracker.on_price(sym, int(t.get("timestamp_exchange", 0)), price)
+                signal = None
+
+            if signal is not None:
+                trade_ts = int(t.get("timestamp_exchange", 0))
+                signal.timestamp = trade_ts
+                signals.append(signal)
+                order = _signal_to_order(signal)
+                fill = simulator.simulate_fill(
+                    order=order,
+                    mid_price=signal.mid_price_at_signal,
+                    spread=signal.spread_at_signal,
+                )
+                fill.timestamp = trade_ts
+                fills.append(fill)
+
+                # Counterpart leg on symbol_b
+                counterpart = strategy.get_counterpart_signal()
+                if counterpart is not None and latest_price.get(symbol_b, 0) > 0:
+                    counterpart.mid_price_at_signal = latest_price[symbol_b]
+                    counterpart.timestamp = trade_ts
+                    signals.append(counterpart)
+                    cp_order = _signal_to_order(counterpart)
+                    cp_fill = simulator.simulate_fill(
+                        order=cp_order,
+                        mid_price=latest_price[symbol_b],
+                        spread=latest_price[symbol_b] * 0.0001,
+                    )
+                    cp_fill.timestamp = trade_ts
+                    fills.append(cp_fill)
 
         return signals, fills
-
-
-def _pearson(x: list[float], y: list[float]) -> float:
-    """Pearson correlation."""
-    n = min(len(x), len(y))
-    if n < 2:
-        return 0.0
-    x = x[:n]
-    y = y[:n]
-    mx = sum(x) / n
-    my = sum(y) / n
-    cov = sum((xi - mx) * (yi - my) for xi, yi in zip(x, y, strict=True)) / n
-    sx = (sum((xi - mx) ** 2 for xi in x) / n) ** 0.5
-    sy = (sum((yi - my) ** 2 for yi in y) / n) ** 0.5
-    if sx == 0 or sy == 0:
-        return 0.0
-    return cov / (sx * sy)

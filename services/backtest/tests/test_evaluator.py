@@ -5,10 +5,9 @@ from __future__ import annotations
 from backtest_svc.evaluator import (
     EvaluatorConfig,
     LocalStrategyEvaluator,
-    SimulatedFill,
     _compute_metrics_from_fills,
-    _pearson,
 )
+from quant_core.models import Fill
 
 # ---------------------------------------------------------------------------
 # _compute_metrics_from_fills tests
@@ -25,7 +24,7 @@ class TestComputeMetricsFromFills:
 
     def test_single_buy(self):
         fills = [
-            SimulatedFill(
+            Fill(
                 timestamp=1000,
                 symbol="BTCUSD",
                 side="BUY",
@@ -44,7 +43,7 @@ class TestComputeMetricsFromFills:
 
     def test_round_trip_profit(self):
         fills = [
-            SimulatedFill(
+            Fill(
                 timestamp=1000,
                 symbol="BTCUSD",
                 side="BUY",
@@ -54,7 +53,7 @@ class TestComputeMetricsFromFills:
                 slippage_bps=0.0,
                 strategy_id="test",
             ),
-            SimulatedFill(
+            Fill(
                 timestamp=2000,
                 symbol="BTCUSD",
                 side="SELL",
@@ -73,7 +72,7 @@ class TestComputeMetricsFromFills:
 
     def test_round_trip_loss(self):
         fills = [
-            SimulatedFill(
+            Fill(
                 timestamp=1000,
                 symbol="BTCUSD",
                 side="BUY",
@@ -83,7 +82,7 @@ class TestComputeMetricsFromFills:
                 slippage_bps=0.0,
                 strategy_id="test",
             ),
-            SimulatedFill(
+            Fill(
                 timestamp=2000,
                 symbol="BTCUSD",
                 side="SELL",
@@ -101,7 +100,7 @@ class TestComputeMetricsFromFills:
 
     def test_fees_reduce_pnl(self):
         fills = [
-            SimulatedFill(
+            Fill(
                 timestamp=1000,
                 symbol="BTCUSD",
                 side="BUY",
@@ -110,7 +109,7 @@ class TestComputeMetricsFromFills:
                 fee=50.0,
                 slippage_bps=0.0,
             ),
-            SimulatedFill(
+            Fill(
                 timestamp=2000,
                 symbol="BTCUSD",
                 side="SELL",
@@ -127,7 +126,7 @@ class TestComputeMetricsFromFills:
 
     def test_drawdown_tracked(self):
         fills = [
-            SimulatedFill(
+            Fill(
                 timestamp=1000,
                 symbol="BTCUSD",
                 side="BUY",
@@ -136,7 +135,7 @@ class TestComputeMetricsFromFills:
                 fee=0.0,
                 slippage_bps=0.0,
             ),
-            SimulatedFill(
+            Fill(
                 timestamp=2000,
                 symbol="BTCUSD",
                 side="SELL",
@@ -155,7 +154,7 @@ class TestComputeMetricsFromFills:
 
     def test_short_round_trip(self):
         fills = [
-            SimulatedFill(
+            Fill(
                 timestamp=1000,
                 symbol="BTCUSD",
                 side="SELL",
@@ -164,7 +163,7 @@ class TestComputeMetricsFromFills:
                 fee=0.0,
                 slippage_bps=0.0,
             ),
-            SimulatedFill(
+            Fill(
                 timestamp=2000,
                 symbol="BTCUSD",
                 side="BUY",
@@ -177,37 +176,6 @@ class TestComputeMetricsFromFills:
         result = _compute_metrics_from_fills(fills, 100_000.0)
         # Short at 50k, cover at 49k → profit 100
         assert abs(result["realized_pnl"] - 100.0) < 0.01
-
-
-# ---------------------------------------------------------------------------
-# _pearson tests
-# ---------------------------------------------------------------------------
-
-
-class TestPearson:
-    def test_perfect_correlation(self):
-        x = [1.0, 2.0, 3.0, 4.0, 5.0]
-        y = [2.0, 4.0, 6.0, 8.0, 10.0]
-        assert abs(_pearson(x, y) - 1.0) < 1e-10
-
-    def test_perfect_negative(self):
-        x = [1.0, 2.0, 3.0, 4.0, 5.0]
-        y = [10.0, 8.0, 6.0, 4.0, 2.0]
-        assert abs(_pearson(x, y) - (-1.0)) < 1e-10
-
-    def test_no_correlation(self):
-        # Orthogonal-ish series
-        x = [1.0, -1.0, 1.0, -1.0]
-        y = [1.0, 1.0, -1.0, -1.0]
-        assert abs(_pearson(x, y)) < 0.01
-
-    def test_too_short(self):
-        assert _pearson([1.0], [2.0]) == 0.0
-
-    def test_constant_series(self):
-        x = [5.0, 5.0, 5.0, 5.0, 5.0]
-        y = [1.0, 2.0, 3.0, 4.0, 5.0]
-        assert _pearson(x, y) == 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +391,7 @@ class TestUnknownStrategy:
 class TestEvaluatorConfig:
     def test_defaults(self):
         cfg = EvaluatorConfig()
-        assert cfg.fee_rate == 0.006
+        assert cfg.fee_rate is None  # None → tiered fee model via FillSimulator
         assert cfg.slippage_bps == 1.0
         assert cfg.initial_equity == 100_000.0
         assert cfg.strategy_type == "mean_reversion"
