@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       redis:
@@ -24,10 +25,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python 3.14 (confluent-kafka has no 3.15 wheel yet)
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14-dev"
+          python-version: "3.14"
 
       - name: Install dependencies
         run: |
@@ -45,6 +46,12 @@ jobs:
 
   cpp-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # quant_cpp has no Kafka dependency, so it is also checked on 3.15.
+        python-version: ["3.14", "3.15"]
 
     steps:
       - uses: actions/checkout@v4
@@ -52,10 +59,10 @@ jobs:
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y cmake g++
 
-      - name: Set up Python 3.14
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14-dev"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install pybind11
         run: pip install pybind11
@@ -78,6 +85,7 @@ jobs:
 
   docker-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: test
 
     steps:
@@ -103,6 +111,7 @@ jobs:
 
   frontend-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4

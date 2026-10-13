@@ -14,6 +14,8 @@ testpaths = [
     "services/post-trade/tests",
     "services/backtest/tests",
     "cpp/tests",
+    "monitoring/tests",
+    "scripts/tests",
 ]
 asyncio_mode = "auto"
 norecursedirs = ["node_modules", "dist", "cpp/build", "venv", ".git", "frontend"]

@@ -49,11 +49,11 @@ class TestPrometheusConfig:
         job_names = [job.get("job_name") for job in scrape_configs]
 
         expected_services = [
-            "market-data-service",
-            "signal-engine",
-            "execution-service",
-            "risk-manager",
-            "portfolio-monitor"
+            "market-data",
+            "alpha-engine",
+            "risk-gateway",
+            "execution",
+            "post-trade",
         ]
 
         for service in expected_services:

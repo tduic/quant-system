@@ -18,3 +18,6 @@ sys.path.insert(0, str(PROJECT_ROOT / "services" / "risk-gateway"))
 sys.path.insert(0, str(PROJECT_ROOT / "services" / "execution"))
 sys.path.insert(0, str(PROJECT_ROOT / "services" / "post-trade"))
 sys.path.insert(0, str(PROJECT_ROOT / "services" / "backtest"))
+
+# Standalone scripts (paper_trading_validator)
+sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
