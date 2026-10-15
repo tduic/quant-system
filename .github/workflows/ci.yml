@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: ["**"]
   pull_request:
@@ -8,7 +9,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'local' && fromJSON('["self-hosted","linux","ARM64","tduic-local"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
 
     services:
@@ -45,7 +46,7 @@ jobs:
         run: python -m pytest --cov --cov-report=term-missing
 
   cpp-build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'local' && fromJSON('["self-hosted","linux","ARM64","tduic-local"]') || 'ubuntu-latest' }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -84,7 +85,7 @@ jobs:
           python -m pytest cpp/tests/test_quant_cpp.py -v
 
   docker-build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'local' && fromJSON('["self-hosted","linux","ARM64","tduic-local"]') || 'ubuntu-latest' }}
     timeout-minutes: 30
     needs: test
 
@@ -110,7 +111,7 @@ jobs:
         run: docker build -f services/post-trade/Dockerfile -t quant-post-trade .
 
   frontend-build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER == 'local' && fromJSON('["self-hosted","linux","ARM64","tduic-local"]') || 'ubuntu-latest' }}
     timeout-minutes: 15
 
     steps:
