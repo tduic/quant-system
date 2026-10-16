@@ -67,7 +67,7 @@ Coinbase WebSocket                                         Coinbase REST API
 ## Tech Stack
 
 - **Language**: Python 3.14 (C++ via pybind11 for performance-critical paths)
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS + recharts
+- **Frontend**: React 19 + TypeScript 7 + Vite + Tailwind CSS + recharts (Node 24 LTS)
 - **Messaging**: Apache Kafka (confluent-kafka)
 - **Database**: TimescaleDB (PostgreSQL + time-series extensions)
 - **Cache**: Redis
@@ -228,7 +228,8 @@ Beyond the core `trades`, `order_book_snapshots`, `orders`, and `fills` hypertab
 
 ### Prerequisites
 - Docker Desktop (running)
-- Python 3.14
+- Python 3.14 (not 3.15 yet: confluent-kafka has no 3.15 wheel; the C++ module alone is tested on 3.15)
+- Node.js 24 LTS (frontend)
 - Git
 
 ### Setup
